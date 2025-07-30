@@ -49,6 +49,11 @@ class IrrigationController extends IPSModule
         $this->RegisterVariableInteger('Duration', 'Dauer (Min)', 'IRR.Duration', 20);
         $this->RegisterVariableInteger('MoistureThreshold', 'Feuchteschwelle (%)', 'IRR.MoistureThreshold', 30);
 
+        // Standardwerte für Variablen setzen
+        $this->SetValue('Mode', $this->ReadPropertyInteger('Mode'));
+        $this->SetValue('Duration', $this->ReadPropertyInteger('Duration'));
+        $this->SetValue('MoistureThreshold', $this->ReadPropertyInteger('MoistureThreshold'));
+
         // Web-Editing aktivieren
         $this->EnableAction('Mode');
         $this->EnableAction('Duration');
