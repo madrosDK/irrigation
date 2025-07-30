@@ -14,10 +14,10 @@ class IrrigationController extends IPSModule
         $this->RegisterPropertyInteger('Valve1', 0);
         $this->RegisterPropertyInteger('Valve2', 0);
         $this->RegisterPropertyInteger('Pump', 0);
-        // Bewässerungsparameter als Properties
-        $this->RegisterPropertyInteger('Mode', 0); // 0=Manuell,1=Automatik
-        $this->RegisterPropertyInteger('Duration', 10);
-        $this->RegisterPropertyInteger('MoistureThreshold', 30);
+        // Bewässerungsparameter
+        $this->RegisterPropertyInteger('Mode', 0);            // 0=Manuell,1=Zeitsteuerung,2=Automatik
+        $this->RegisterPropertyInteger('Duration', 10);       // Dauer in Minuten
+        $this->RegisterPropertyInteger('MoistureThreshold', 30); // Schwellwert Feuchte in %
 
         // Profile für Betriebsmodus
         if (!IPS_VariableProfileExists('IRR.Mode')) {
@@ -50,18 +50,15 @@ class IrrigationController extends IPSModule
         $this->EnableAction('Duration');
         $this->EnableAction('MoistureThreshold');
 
-        // Wochenplan-Event anlegen
+        // Wochenplan-Event anlegen (nur Ereignis, ohne automatische Konfiguration)
         $eventName = 'IrrigationSchedule_' . $this->InstanceID;
         $eventId = @IPS_GetObjectIDByName($eventName, $this->InstanceID);
         if ($eventId === false) {
-            $eventId = IPS_CreateEvent(1); // zyklisches Ereignis
+            $eventId = IPS_CreateEvent(0); // 0 = Execute script event (use scheduler)
             IPS_SetParent($eventId, $this->InstanceID);
             IPS_SetEventScript($eventId, 'IrrigationController_CheckAndIrrigate(' . $this->InstanceID . ');');
             IPS_SetName($eventId, $eventName);
-            // Standard: Montag 04:00
-            IPS_SetEventActive($eventId, true);
-            IPS_SetEventCyclic($eventId, 2, 1, 0, 0, 0);
-            IPS_SetEventCyclicTimeFrom($eventId, 4 * 3600);
+            IPS_SetEventActive($eventId, false);
         }
     }
 
@@ -73,7 +70,8 @@ class IrrigationController extends IPSModule
         $eventName = 'IrrigationSchedule_' . $this->InstanceID;
         $eventId = IPS_GetObjectIDByName($eventName, $this->InstanceID);
         if ($eventId !== false) {
-            IPS_SetEventActive($eventId, ($mode === 1));
+            // Nur bei Zeitsteuerung und Automatik aktiv
+            IPS_SetEventActive($eventId, in_array($mode, [1, 2]));
         }
     }
 
@@ -93,10 +91,17 @@ class IrrigationController extends IPSModule
 
     public function CheckAndIrrigate()
     {
-        if ($this->ReadPropertyInteger('Mode') !== 1) {
-            return; // nur im Automatikmodus
+        $mode = $this->ReadPropertyInteger('Mode');
+        if ($mode === 0) {
+            return; // Manuell
         }
-        if ($this->ShouldWater()) {
+        if ($mode === 1) {
+            // Zeitsteuerung: immer bewässern
+            $this->ActivateWatering();
+            return;
+        }
+        // Automatik: Feuchte prüfen
+        if ($mode === 2 && $this->ShouldWater()) {
             $this->ActivateWatering();
         }
     }
