@@ -4,71 +4,137 @@ declare(strict_types=1);
 
 class IrrigationController extends IPSModule
 {
-    public function Create()
-    {
-        parent::Create();
-        $this->RegisterPropertyInteger('Mode', 0);
-        $this->RegisterPropertyInteger('MoistureSensor1', 0);
-        $this->RegisterPropertyInteger('MoistureSensor2', 0);
-        $this->RegisterPropertyInteger('RainLast24h', 0);
-        $this->RegisterPropertyInteger('Valve1', 0);
-        $this->RegisterPropertyInteger('Valve2', 0);
-        $this->RegisterPropertyInteger('Pump', 0);
-        $this->RegisterPropertyInteger('Duration', 10);
-        $this->RegisterPropertyInteger('MoistureThreshold', 30);
-        $this->RegisterPropertyString('StartTime', '06:00');
-        $this->RegisterPropertyInteger('Days', 127); // Alle Tage aktiv
-    }
+  public function Create()
+  {
+      parent::Create();
+      // Properties for sensor and actor instance IDs
+      $this->RegisterPropertyInteger('MoistureSensor1', 0);
+      $this->RegisterPropertyInteger('MoistureSensor2', 0);
+      $this->RegisterPropertyInteger('RainLast24h', 0);
+      $this->RegisterPropertyInteger('Valve1', 0);
+      $this->RegisterPropertyInteger('Valve2', 0);
+      $this->RegisterPropertyInteger('Pump', 0);
 
-    public function ApplyChanges()
-    {
-        parent::ApplyChanges();
-        // Hier könnten Timer o.ä. gesetzt werden, je nach Modus
-    }
+      // User-configurable variables
+      $this->RegisterVariableInteger('Mode', 'Betriebsmodus', '', 10);
+      $this->RegisterVariableInteger('Days', 'Wochentage', '', 20);
+      $this->RegisterVariableString('StartTime', 'Startzeit', '', 30);
+      $this->RegisterVariableInteger('Duration', 'Dauer (Min)', '', 40);
+      $this->RegisterVariableInteger('MoistureThreshold', 'Feuchteschwelle (%)', '', 50);
 
-    public function RequestAction($Ident, $Value)
-    {
-        // Hier kannst du später manuelle Aktionen (z. B. Ventil manuell starten) behandeln
-    }
+      // Profiles
+      $this->RegisterProfileIntegerEx('Irr.Mode', 'Information', '', '', [
+          [0, 'Manuell', '', -1],
+          [1, 'Zeitsteuerung', '', -1],
+          [2, 'Automatik', '', -1]
+      ]);
+      $this->EnableAction('Mode');
+      $this->EnableAction('Days');
+      $this->RegisterProfileString('Irr.Time', 'Clock', '', '', 0, 0, 0, 0);
+      $this->EnableAction('StartTime');
+      $this->EnableAction('Duration');
+      $this->EnableAction('MoistureThreshold');
 
-    private function ReadSensorValue(int $sensorID): ?float
-    {
-        if ($sensorID <= 0) {
-            return null;
-        }
-        $value = @GetValue($sensorID);
-        return is_numeric($value) ? floatval($value) : null;
-    }
+      // Timers
+      $this->RegisterTimer('IrrigateTimer', 0, 'IRR_CheckAndIrrigate($_IPS["TARGET"]);');
+  }
 
-    private function ShouldWater(): bool
-    {
-        $sensor1 = $this->ReadSensorValue($this->ReadPropertyInteger('MoistureSensor1'));
-        $sensor2 = $this->ReadSensorValue($this->ReadPropertyInteger('MoistureSensor2'));
+  public function ApplyChanges()
+  {
+      parent::ApplyChanges();
+      // Setup timer based on Mode
+      $mode = $this->GetValue('Mode');
+      switch ($mode) {
+          case 0: // Manuell
+              $this->SetTimerInterval('IrrigateTimer', 0);
+              break;
+          case 1: // Zeitsteuerung
+              $start = $this->GetValue('StartTime');
+              $seconds = $this->TimeStringToSeconds($start);
+              $this->SetTimerInterval('IrrigateTimer', 24 * 3600 * 1000);
+              IPS_SetEventCyclicTimeFrom('IrrigateTimer', $seconds);
+              break;
+          case 2: // Automatik
+              $start = $this->GetValue('StartTime');
+              $seconds = $this->TimeStringToSeconds($start);
+              $this->SetTimerInterval('IrrigateTimer', 24 * 3600 * 1000);
+              IPS_SetEventCyclicTimeFrom('IrrigateTimer', $seconds);
+              break;
+      }
+  }
 
-        $threshold = $this->ReadPropertyInteger('MoistureThreshold');
+  public function RequestAction($Ident, $Value)
+  {
+      switch ($Ident) {
+          case 'Mode':
+          case 'Days':
+          case 'StartTime':
+          case 'Duration':
+          case 'MoistureThreshold':
+              $this->SetValue($Ident, $Value);
+              $this->ApplyChanges();
+              break;
+          default:
+              throw new Exception('Unknown Ident');
+      }
+  }
 
-        $belowThreshold = [];
-        if (!is_null($sensor1)) $belowThreshold[] = $sensor1 < $threshold;
-        if (!is_null($sensor2)) $belowThreshold[] = $sensor2 < $threshold;
+  public function CheckAndIrrigate()
+  {
+      $mode = $this->GetValue('Mode');
+      $shouldIrrigate = false;
+      if ($mode === 1) {
+          // Zeitsteuerung ignoriert Feuchte
+          $shouldIrrigate = true;
+      } elseif ($mode === 2) {
+          // Automatik: Feuchte prüfen
+          $shouldIrrigate = $this->ShouldWater();
+      }
+      if ($shouldIrrigate) {
+          $this->ActivateWatering();
+      }
+  }
 
-        return in_array(true, $belowThreshold, true);
-    }
+  private function ShouldWater(): bool
+  {
+      $threshold = $this->GetValue('MoistureThreshold');
+      $values = [];
+      foreach (['MoistureSensor1','MoistureSensor2'] as $prop) {
+          $id = $this->ReadPropertyInteger($prop);
+          if ($id > 0) {
+              $val = GetValue($id);
+              $values[] = is_numeric($val) ? $val : null;
+          }
+      }
+      foreach ($values as $v) {
+          if ($v !== null && $v < $threshold) {
+              return true;
+          }
+      }
+      return false;
+  }
 
-    private function ActivateWatering()
-    {
-        $duration = $this->ReadPropertyInteger('Duration');
-        $valve1 = $this->ReadPropertyInteger('Valve1');
-        $valve2 = $this->ReadPropertyInteger('Valve2');
-        $pump = $this->ReadPropertyInteger('Pump');
+  private function ActivateWatering()
+  {
+      $duration = $this->GetValue('Duration');
+      foreach (['Pump','Valve1','Valve2'] as $prop) {
+          $id = $this->ReadPropertyInteger($prop);
+          if ($id > 0) {
+              RequestAction($id, true);
+          }
+      }
+      IPS_Sleep($duration * 60 * 1000);
+      foreach (['Pump','Valve1','Valve2'] as $prop) {
+          $id = $this->ReadPropertyInteger($prop);
+          if ($id > 0) {
+              RequestAction($id, false);
+          }
+      }
+  }
 
-        if ($pump > 0) RequestAction($pump, true);
-        if ($valve1 > 0) RequestAction($valve1, true);
-        if ($valve2 > 0) RequestAction($valve2, true);
-
-        IPS_Sleep($duration * 60 * 1000);
-
-        if ($valve1 > 0) RequestAction($valve1, false);
-        if ($valve2 > 0) RequestAction($valve2, false);
-        if ($pump > 0) RequestAction($pump, false);
-    }
+  private function TimeStringToSeconds(string $time): int
+  {
+      list($h,$m) = explode(':',$time);
+      return ((int)$h*3600 + (int)$m*60);
+  }
 }

@@ -13,66 +13,22 @@
     {
       "name": "RainLast24h",
       "type": "SelectVariable",
-      "caption": "Regenmenge (Davis, letzte 24h)"
+      "caption": "Regenmenge (Davis, letzte 24 h)"
     },
     {
       "name": "Valve1",
       "type": "SelectInstance",
-      "caption": "Ventilaktor 1 (Shelly/xComfort)"
+      "caption": "Ventilaktor 1 (Shelly/xComfort)"
     },
     {
       "name": "Valve2",
       "type": "SelectInstance",
-      "caption": "Ventilaktor 2 (Shelly/xComfort)"
+      "caption": "Ventilaktor 2 (Shelly/xComfort)"
     },
     {
       "name": "Pump",
       "type": "SelectInstance",
-      "caption": "Pumpenaktor (xComfort)"
-    },
-    {
-      "name": "Mode",
-      "type": "Select",
-      "caption": "Betriebsmodus",
-      "options": [
-        { "caption": "Manuell",       "value": 0 },
-        { "caption": "Zeitsteuerung", "value": 1 },
-        { "caption": "Automatik",     "value": 2 }
-      ]
-    },
-    {
-      "type": "ValidationTextBox",
-      "name": "StartTime",
-      "caption": "Bewässerungszeit (Start)",
-      "suffix": "HH:MM"
-    },
-    {
-      "type": "SelectWeekdays",
-      "name": "Days",
-      "caption": "Wochentage für Zeitsteuerung"
-    },
-    {
-      "type": "NumberSpinner",
-      "name": "MoistureThreshold",
-      "caption": "Feuchteschwelle (%)"
-    },
-    {
-      "type": "NumberSpinner",
-      "name": "Duration",
-      "caption": "Bewässerungsdauer (Minuten)",
-      "suffix": "Minuten"
-    }
-  ],
-  "actions": [
-    {
-      "type": "Button",
-      "caption": "Start Zone",
-      "onClick": "IRR_StartZone($id);"
-    },
-    {
-      "type": "Button",
-      "caption": "Stop",
-      "onClick": "IRR_ActivateWatering($id);"
+      "caption": "Pumpenaktor (xComfort)"
     }
   ]
 }
