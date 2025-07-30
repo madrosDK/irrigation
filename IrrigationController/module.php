@@ -48,8 +48,24 @@ class IrrigationController extends IPSModule
         $this->RegisterVariableInteger('Mode', 'Betriebsmodus', 'IRR.Mode', 10);
         $this->RegisterVariableInteger('Duration', 'Dauer (Min)', 'IRR.Duration', 20);
         $this->RegisterVariableInteger('MoistureThreshold', 'Feuchteschwelle (%)', 'IRR.MoistureThreshold', 30);
+        // Profil neu setzen (falls Profil geändert wurde)
+        $vid = $this->GetIDForIdent('Mode');
+        if ($vid !== false) {
+            IPS_SetVariableCustomProfile($vid, 'IRR.Mode');
+        }
+        $vid = $this->GetIDForIdent('Duration');
+        if ($vid !== false) {
+            IPS_SetVariableCustomProfile($vid, 'IRR.Duration');
+        }
+        $vid = $this->GetIDForIdent('MoistureThreshold');
+        if ($vid !== false) {
+            IPS_SetVariableCustomProfile($vid, 'IRR.MoistureThreshold');
+        }
 
         // Standardwerte für Variablen setzen
+        $this->SetValue('Mode', $this->ReadPropertyInteger('Mode'));
+        $this->SetValue('Duration', $this->ReadPropertyInteger('Duration'));
+        $this->SetValue('MoistureThreshold', $this->ReadPropertyInteger('MoistureThreshold'));
         $this->SetValue('Mode', $this->ReadPropertyInteger('Mode'));
         $this->SetValue('Duration', $this->ReadPropertyInteger('Duration'));
         $this->SetValue('MoistureThreshold', $this->ReadPropertyInteger('MoistureThreshold'));
