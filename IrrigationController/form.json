@@ -3,12 +3,12 @@
     {
       "name": "MoistureSensor1",
       "type": "SelectVariable",
-      "caption": "MiFlora Sensor 1 (optional)"
+      "caption": "MiFlora Sensor 1 (optional)"
     },
     {
       "name": "MoistureSensor2",
       "type": "SelectVariable",
-      "caption": "MiFlora Sensor 2 (optional)"
+      "caption": "MiFlora Sensor 2 (optional)"
     },
     {
       "name": "RainLast24h",
@@ -28,22 +28,23 @@
     {
       "name": "Pump",
       "type": "SelectInstance",
-      "caption": "Pumpenaktor (xComfort)"
+      "caption": "Pumpenaktor (xComfort)"
     },
     {
       "name": "Mode",
       "type": "Select",
       "caption": "Betriebsmodus",
       "options": [
-        { "caption": "Manuell", "value": 0 },
+        { "caption": "Manuell",       "value": 0 },
         { "caption": "Zeitsteuerung", "value": 1 },
-        { "caption": "Automatik",   "value": 2 }
+        { "caption": "Automatik",     "value": 2 }
       ]
     },
     {
-      "type": "TimeSpinner",
+      "type": "ValidationTextBox",
       "name": "StartTime",
-      "caption": "Bewässerungszeit (Start)"
+      "caption": "Bewässerungszeit (Start)",
+      "suffix": "HH:MM"
     },
     {
       "type": "SelectWeekdays",
