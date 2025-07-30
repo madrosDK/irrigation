@@ -31,6 +31,11 @@ class IrrigationController extends IPSModule
         $this->RegisterVariableInteger('Duration', 'Dauer (Min)', '', 40);
         $this->RegisterVariableInteger('MoistureThreshold', 'Feuchteschwelle (%)', '', 50);
 
+        // Set default StartTime if not set
+        if ($this->GetValue('StartTime') === '') {
+            $this->SetValue('StartTime', '06:00');
+        }
+
         // Enable actions for variables to be editable in web interface
         $this->EnableAction('Mode');
         $this->EnableAction('Days');
@@ -137,7 +142,10 @@ class IrrigationController extends IPSModule
 
     private function TimeStringToSeconds(string $time): int
     {
-        list($h,$m) = explode(':',$time);
-        return ((int)$h*3600 + (int)$m*60);
+        if (strpos($time, ':') === false) {
+            return 0;
+        }
+        list($h, $m) = explode(':', $time);
+        return ((int)$h * 3600 + (int)$m * 60);
     }
 }
