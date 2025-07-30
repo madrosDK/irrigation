@@ -14,21 +14,21 @@ class IrrigationController extends IPSModule
         $this->RegisterPropertyInteger('Valve1', 0);
         $this->RegisterPropertyInteger('Valve2', 0);
         $this->RegisterPropertyInteger('Pump', 0);
-
         // Bewässerungsparameter (Betriebsmodus: 0=Aus,1=Manuell,2=Zeitsteuerung,3=Automatik)
         $this->RegisterPropertyInteger('Mode', 0);
-        $this->RegisterPropertyInteger('Duration', 5);       // Dauer in Minuten, Standard=5       // Dauer in Minuten
-        $this->RegisterPropertyInteger('MoistureThreshold', 50); // Schwellwert Feuchte in %, Standard=50 // Schwellwert Feuchte in %
+        $this->RegisterPropertyInteger('Duration', 5);       // Dauer in Minuten, Standard=5
+        $this->RegisterPropertyInteger('MoistureThreshold', 50); // Schwellwert Feuchte in %, Standard=50
 
-        // Profile für Betriebsmodus
-        if (!IPS_VariableProfileExists('IRR.Mode')) {
-            IPS_CreateVariableProfile('IRR.Mode', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileValues('IRR.Mode', 0, 3, 1);
-            IPS_SetVariableProfileAssociation('IRR.Mode', 0, 'Aus', '', 0x000000);
-            IPS_SetVariableProfileAssociation('IRR.Mode', 1, 'Manuell', '', 0x808080);
-            IPS_SetVariableProfileAssociation('IRR.Mode', 2, 'Zeitsteuerung', '', 0xFFFF00);
-            IPS_SetVariableProfileAssociation('IRR.Mode', 3, 'Automatik', '', 0x00FF00);
+        // Profil für Betriebsmodus neu erstellen (überschreiben)
+        if (IPS_VariableProfileExists('IRR.Mode')) {
+            IPS_DeleteVariableProfile('IRR.Mode');
         }
+        IPS_CreateVariableProfile('IRR.Mode', VARIABLETYPE_INTEGER);
+        IPS_SetVariableProfileValues('IRR.Mode', 0, 3, 1);
+        IPS_SetVariableProfileAssociation('IRR.Mode', 0, 'Aus', '', 0x000000);
+        IPS_SetVariableProfileAssociation('IRR.Mode', 1, 'Manuell', '', 0x808080);
+        IPS_SetVariableProfileAssociation('IRR.Mode', 2, 'Zeitsteuerung', '', 0xFFFF00);
+        IPS_SetVariableProfileAssociation('IRR.Mode', 3, 'Automatik', '', 0x00FF00);
 
         // Profile für Dauer (1-120 Minuten)
         if (!IPS_VariableProfileExists('IRR.Duration')) {
@@ -75,11 +75,11 @@ class IrrigationController extends IPSModule
     {
         parent::ApplyChanges();
         // Event aktiv/inaktiv je nach Modus
-        $mode = $this->ReadPropertyInteger('Mode');
+        $mode = $this->GetValue('Mode');
         $eventName = 'IrrigationSchedule_' . $this->InstanceID;
         $eventId = IPS_GetObjectIDByName($eventName, $this->InstanceID);
         if ($eventId !== false) {
-            // Modus Aus (0): deaktiviert, Manuell (1): via manuelle Aktion, Zeitsteuerung(2)&Automatik(3): aktiv
+            // Modus Aus (0): deaktiviert, Zeitsteuerung(2)&Automatik(3): aktiv
             $active = in_array($mode, [2, 3]);
             IPS_SetEventActive($eventId, $active);
         }
@@ -101,7 +101,7 @@ class IrrigationController extends IPSModule
 
     public function CheckAndIrrigate()
     {
-        $mode = $this->ReadPropertyInteger('Mode');
+        $mode = $this->GetValue('Mode');
         switch ($mode) {
             case 0: // Aus
                 return;
@@ -121,9 +121,9 @@ class IrrigationController extends IPSModule
 
     private function ShouldWater(): bool
     {
-        $threshold = $this->ReadPropertyInteger('MoistureThreshold');
+        $threshold = $this->GetValue('MoistureThreshold');
         foreach (['MoistureSensor1', 'MoistureSensor2'] as $prop) {
-            $id = $this->ReadPropertyInteger($prop);
+            $id = $this->GetValue($prop);
             if ($id > 0 && is_numeric(GetValue($id)) && GetValue($id) < $threshold) {
                 return true;
             }
@@ -133,16 +133,16 @@ class IrrigationController extends IPSModule
 
     private function ActivateWatering()
     {
-        $duration = $this->ReadPropertyInteger('Duration');
+        $duration = $this->GetValue('Duration');
         foreach (['Pump', 'Valve1', 'Valve2'] as $prop) {
-            $id = $this->ReadPropertyInteger($prop);
+            $id = $this->GetValue($prop);
             if ($id > 0) {
                 IPS_RequestAction($id, true);
             }
         }
         IPS_Sleep($duration * 60 * 1000);
         foreach (['Pump', 'Valve1', 'Valve2'] as $prop) {
-            $id = $this->ReadPropertyInteger($prop);
+            $id = $this->GetValue($prop);
             if ($id > 0) {
                 IPS_RequestAction($id, false);
             }
