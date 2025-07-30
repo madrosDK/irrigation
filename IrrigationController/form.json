@@ -18,57 +18,60 @@
     {
       "name": "Valve1",
       "type": "SelectInstance",
-      "caption": "Ventilaktor 1 (Shelly/xComfort)"
+      "caption": "Ventilaktor 1 (Shelly/xComfort)"
     },
     {
       "name": "Valve2",
       "type": "SelectInstance",
-      "caption": "Ventilaktor 2 (Shelly/xComfort)"
+      "caption": "Ventilaktor 2 (Shelly/xComfort)"
     },
     {
       "name": "Pump",
       "type": "SelectInstance",
-      "caption": "Pumpenaktor (xComfort)"
+      "caption": "Pumpenaktor (xComfort)"
     },
     {
       "name": "Mode",
       "type": "Select",
       "caption": "Betriebsmodus",
       "options": [
-        {
-          "caption": "Manuell",
-          "value": 0
-        },
-        {
-          "caption": "Zeitsteuerung",
-          "value": 1
-        },
-        {
-          "caption": "Automatik",
-          "value": 2
-        }
+        { "caption": "Manuell", "value": 0 },
+        { "caption": "Zeitsteuerung", "value": 1 },
+        { "caption": "Automatik",   "value": 2 }
       ]
     },
     {
-      "type": "Time",
+      "type": "TimeSpinner",
       "name": "StartTime",
-      "caption": "Bew\u00e4sserungszeit (Start)"
+      "caption": "Bewässerungszeit (Start)"
     },
     {
       "type": "SelectWeekdays",
       "name": "Days",
-      "caption": "Wochentage f\u00fcr Zeitsteuerung"
+      "caption": "Wochentage für Zeitsteuerung"
     },
     {
       "type": "NumberSpinner",
       "name": "MoistureThreshold",
-      "caption": "Feuchteschwelle (%)"
+      "caption": "Feuchteschwelle (%)"
     },
     {
       "type": "NumberSpinner",
       "name": "Duration",
-      "caption": "Bew\u00e4sserungsdauer (Minuten)",
+      "caption": "Bewässerungsdauer (Minuten)",
       "suffix": "Minuten"
+    }
+  ],
+  "actions": [
+    {
+      "type": "Button",
+      "caption": "Start Zone",
+      "onClick": "IRR_StartZone($id);"
+    },
+    {
+      "type": "Button",
+      "caption": "Stop",
+      "onClick": "IRR_ActivateWatering($id);"
     }
   ]
 }
