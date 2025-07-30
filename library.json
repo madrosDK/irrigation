@@ -3,10 +3,10 @@
   "name": "Irrigation Control Library",
   "author": "madrosDK",
   "url": "https://github.com/madrosDK/irrigation",
+  "compatibility": {
+      "version": "6.4"
+  },
   "version": "1.0",
   "build": 1,
-  "date": 1753881152,
-  "compatibility": {
-    "version": "6.4"
-  }
+  "date": 1722345600
 }

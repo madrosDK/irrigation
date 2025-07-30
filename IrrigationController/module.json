@@ -3,11 +3,9 @@
   "name": "Irrigation Controller",
   "url": "https://github.com/madrosDK/irrigation",
   "type": 5,
+  "vendor": "",
+  "aliases": [],
   "prefix": "IRR",
-  "author": "madrosDK",
-  "version": "1.0",
-  "build": 1,
-  "date": 1753881152,
   "parentRequirements": [],
   "childRequirements": [],
   "implemented": []
