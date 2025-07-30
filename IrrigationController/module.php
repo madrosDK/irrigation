@@ -29,7 +29,7 @@ class IrrigationController extends IPSModule
             IPS_SetName($eventId, $eventName);
         }
                 // Wochenplan konfigurieren (wöchentlich) – bitte Tage und Zeiten im IP‑Symcon Ereignis‑UI einstellen
-        IPS_SetEventCyclic($eventId, 2, 1, 0, 0, 0); // Typ 2 = wöchentlich
+                // Wochenplan: bitte über Ereignis-UI Tage und Zeit einstellen // Typ 2 = wöchentlich
         IPS_SetEventActive($eventId, true);
     }
 
