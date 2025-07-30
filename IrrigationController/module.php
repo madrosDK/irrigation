@@ -7,7 +7,7 @@ class IrrigationController extends IPSModule
     public function Create()
     {
         parent::Create();
-        // Properties for sensor and actor instance IDs
+        // Properties for sensor and actor IDs
         $this->RegisterPropertyInteger('MoistureSensor1', 0);
         $this->RegisterPropertyInteger('MoistureSensor2', 0);
         $this->RegisterPropertyInteger('RainLast24h', 0);
@@ -24,49 +24,43 @@ class IrrigationController extends IPSModule
             IPS_SetVariableProfileAssociation('IRR.Mode', 2, 'Automatik', '', 0x00FF00);
         }
 
-        // User-configurable variables
+        // Web-configurable variables
         $this->RegisterVariableInteger('Mode', 'Betriebsmodus', 'IRR.Mode', 10);
         $this->RegisterVariableInteger('Days', 'Wochentage', '', 20);
         $this->RegisterVariableString('StartTime', 'Startzeit', '', 30);
         $this->RegisterVariableInteger('Duration', 'Dauer (Min)', '', 40);
         $this->RegisterVariableInteger('MoistureThreshold', 'Feuchteschwelle (%)', '', 50);
 
-        // Set default StartTime if not set
+        // Defaults
         if ($this->GetValue('StartTime') === '') {
             $this->SetValue('StartTime', '06:00');
         }
 
-        // Enable actions for variables to be editable in web interface
+        // Make variables actionable
         $this->EnableAction('Mode');
         $this->EnableAction('Days');
         $this->EnableAction('StartTime');
         $this->EnableAction('Duration');
         $this->EnableAction('MoistureThreshold');
 
-        // Timers
-        $this->RegisterTimer('IrrigateTimer', 0, 'IRR_CheckAndIrrigate($_IPS["TARGET"]);');
+        // Register timer
+        $this->RegisterTimer('IrrigateTimer', 0, 'IrrigationController_CheckAndIrrigate($_IPS["TARGET"]);');
     }
 
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-        // Setup timer based on Mode
         $mode = $this->GetValue('Mode');
         switch ($mode) {
             case 0: // Manuell
                 $this->SetTimerInterval('IrrigateTimer', 0);
                 break;
             case 1: // Zeitsteuerung
-                $start = $this->GetValue('StartTime');
-                $seconds = $this->TimeStringToSeconds($start);
-                $this->SetTimerInterval('IrrigateTimer', 24 * 3600 * 1000);
-                IPS_SetEventCyclicTimeFrom('IrrigateTimer', $seconds);
-                break;
             case 2: // Automatik
+                // Run daily at configured time
                 $start = $this->GetValue('StartTime');
                 $seconds = $this->TimeStringToSeconds($start);
                 $this->SetTimerInterval('IrrigateTimer', 24 * 3600 * 1000);
-                IPS_SetEventCyclicTimeFrom('IrrigateTimer', $seconds);
                 break;
         }
     }
@@ -92,10 +86,8 @@ class IrrigationController extends IPSModule
         $mode = $this->GetValue('Mode');
         $shouldIrrigate = false;
         if ($mode === 1) {
-            // Zeitsteuerung ignoriert Feuchte
             $shouldIrrigate = true;
         } elseif ($mode === 2) {
-            // Automatik: Feuchte prüfen
             $shouldIrrigate = $this->ShouldWater();
         }
         if ($shouldIrrigate) {
@@ -110,7 +102,7 @@ class IrrigationController extends IPSModule
         foreach (['MoistureSensor1','MoistureSensor2'] as $prop) {
             $id = $this->ReadPropertyInteger($prop);
             if ($id > 0) {
-                $val = GetValue($id);
+                $val = @GetValue($id);
                 $values[] = is_numeric($val) ? $val : null;
             }
         }
@@ -128,14 +120,14 @@ class IrrigationController extends IPSModule
         foreach (['Pump','Valve1','Valve2'] as $prop) {
             $id = $this->ReadPropertyInteger($prop);
             if ($id > 0) {
-                RequestAction($id, true);
+                @RequestAction($id, true);
             }
         }
         IPS_Sleep($duration * 60 * 1000);
         foreach (['Pump','Valve1','Valve2'] as $prop) {
             $id = $this->ReadPropertyInteger($prop);
             if ($id > 0) {
-                RequestAction($id, false);
+                @RequestAction($id, false);
             }
         }
     }
