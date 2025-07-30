@@ -15,14 +15,23 @@ class IrrigationController extends IPSModule
         $this->RegisterPropertyInteger('Valve2', 0);
         $this->RegisterPropertyInteger('Pump', 0);
 
+        // Create profile for Betriebsmodus
+        if (!IPS_VariableProfileExists('IRR.Mode')) {
+            IPS_CreateVariableProfile('IRR.Mode', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileValues('IRR.Mode', 0, 2, 1);
+            IPS_SetVariableProfileAssociation('IRR.Mode', 0, 'Manuell', '', 0x808080);
+            IPS_SetVariableProfileAssociation('IRR.Mode', 1, 'Zeitsteuerung', '', 0xFFFF00);
+            IPS_SetVariableProfileAssociation('IRR.Mode', 2, 'Automatik', '', 0x00FF00);
+        }
+
         // User-configurable variables
-        $this->RegisterVariableInteger('Mode', 'Betriebsmodus', '', 10);
+        $this->RegisterVariableInteger('Mode', 'Betriebsmodus', 'IRR.Mode', 10);
         $this->RegisterVariableInteger('Days', 'Wochentage', '', 20);
         $this->RegisterVariableString('StartTime', 'Startzeit', '', 30);
         $this->RegisterVariableInteger('Duration', 'Dauer (Min)', '', 40);
         $this->RegisterVariableInteger('MoistureThreshold', 'Feuchteschwelle (%)', '', 50);
 
-                // Enable actions for variables to be editable in web interface
+        // Enable actions for variables to be editable in web interface
         $this->EnableAction('Mode');
         $this->EnableAction('Days');
         $this->EnableAction('StartTime');
