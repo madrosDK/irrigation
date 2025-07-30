@@ -39,22 +39,39 @@ class IrrigationController extends IPSModule
             IPS_SetVariableProfileValues('IRR.MoistureThreshold', 1, 100, 1);
             IPS_SetVariableProfileText('IRR.MoistureThreshold', '', ' %');
         }
+        // Profile für Master-Schalter
+        if (!IPS_VariableProfileExists('IRR.Switch')) {
+            IPS_CreateVariableProfile('IRR.Switch', VARIABLETYPE_BOOLEAN);
+            IPS_SetVariableProfileAssociation('IRR.Switch', false, 'Aus', 'Power', 0xFF0000);
+            IPS_SetVariableProfileAssociation('IRR.Switch', true, 'Ein', 'Power', 0x00FF00);
+        }
 
         // Variablen mit Profilen
         $this->RegisterVariableInteger('Mode', 'Betriebsmodus', 'IRR.Mode', 10);
         $this->RegisterVariableInteger('Duration', 'Dauer (Min)', 'IRR.Duration', 20);
         $this->RegisterVariableInteger('MoistureThreshold', 'Feuchteschwelle (%)', 'IRR.MoistureThreshold', 30);
+        $this->RegisterVariableBoolean('Switch', 'Master Schalter', 'IRR.Switch', 40);
 
         // Aktiviere Web-Editing
         $this->EnableAction('Mode');
         $this->EnableAction('Duration');
         $this->EnableAction('MoistureThreshold');
+        $this->EnableAction('Switch');
 
-        // Wochenplan-Event anlegen (nur Ereignis, ohne automatische Konfiguration)
+                // Variable für manuelle Bewässerung
+        if (!IPS_VariableProfileExists('IRR.Manual')) {
+            IPS_CreateVariableProfile('IRR.Manual', VARIABLETYPE_BOOLEAN);
+            IPS_SetVariableProfileAssociation('IRR.Manual', false, 'Aus', '', 0xFF0000);
+            IPS_SetVariableProfileAssociation('IRR.Manual', true, 'Ein', '', 0x00FF00);
+        }
+        $this->RegisterVariableBoolean('Manual', 'Manuelle Bewässerung', 'IRR.Manual', 50);
+        $this->EnableAction('Manual');
+
+        // Wochenplan-Event anlegen (nur Ereignis) (nur Ereignis)
         $eventName = 'IrrigationSchedule_' . $this->InstanceID;
         $eventId = @IPS_GetObjectIDByName($eventName, $this->InstanceID);
         if ($eventId === false) {
-            $eventId = IPS_CreateEvent(0); // 0 = Execute script event (use scheduler)
+            $eventId = IPS_CreateEvent(0);
             IPS_SetParent($eventId, $this->InstanceID);
             IPS_SetEventScript($eventId, 'IrrigationController_CheckAndIrrigate(' . $this->InstanceID . ');');
             IPS_SetName($eventId, $eventName);
@@ -65,13 +82,13 @@ class IrrigationController extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-        // Event aktiv/inaktiv je nach Modus
+        // Event aktiv/inaktiv je nach Modus und Switch
         $mode = $this->ReadPropertyInteger('Mode');
+        $enabled = $this->GetValue('Switch');
         $eventName = 'IrrigationSchedule_' . $this->InstanceID;
         $eventId = IPS_GetObjectIDByName($eventName, $this->InstanceID);
         if ($eventId !== false) {
-            // Nur bei Zeitsteuerung und Automatik aktiv
-            IPS_SetEventActive($eventId, in_array($mode, [1, 2]));
+            IPS_SetEventActive($eventId, $enabled && in_array($mode, [1, 2]));
         }
     }
 
@@ -84,6 +101,10 @@ class IrrigationController extends IPSModule
                 $this->SetValue($Ident, $Value);
                 $this->ApplyChanges();
                 break;
+            case 'Switch':
+                $this->SetValue('Switch', $Value);
+                $this->ApplyChanges();
+                break;
             default:
                 throw new Exception('Unknown Ident');
         }
@@ -91,16 +112,18 @@ class IrrigationController extends IPSModule
 
     public function CheckAndIrrigate()
     {
+        // Master-Schalter prüfen
+        if (!$this->GetValue('Switch')) {
+            return;
+        }
         $mode = $this->ReadPropertyInteger('Mode');
         if ($mode === 0) {
             return; // Manuell
         }
         if ($mode === 1) {
-            // Zeitsteuerung: immer bewässern
             $this->ActivateWatering();
             return;
         }
-        // Automatik: Feuchte prüfen
         if ($mode === 2 && $this->ShouldWater()) {
             $this->ActivateWatering();
         }
