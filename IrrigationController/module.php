@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-class IRRIrrigationController extends IPSModule
+class IrrigationController extends IPSModule
 {
     public function Create()
     {

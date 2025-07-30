@@ -1,7 +1,7 @@
 {
   "id": "{A01F9B78-A377-4D89-BB13-222222222222}",
   "name": "Irrigation Controller",
-  "url": "module.php",
+  "url": "https://github.com/madrosDK/irrigation",
   "type": 5,
   "vendor": "",
   "aliases": [],
