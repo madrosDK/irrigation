@@ -69,8 +69,6 @@ class IrrigationController extends IPSModule
             IPS_SetParent($eventId, $this->InstanceID);
             IPS_SetName($eventId, $eventName);
             IPS_SetEventActive($eventId, false);
-            IPS_SetEventScheduleUseSun($eventId, false);
-
             // Aktionen definieren: 0 = Aus, 1 = Ein
             IPS_SetEventScheduleAction($eventId, 0, 'Aus', 0xFF0000, false);
             IPS_SetEventScheduleAction($eventId, 1, 'Ein', 0x00FF00, true);
