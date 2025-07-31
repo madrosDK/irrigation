@@ -76,7 +76,7 @@ class IrrigationController extends IPSModule
 
             // Gruppe 0 = Montag
             IPS_SetEventScheduleGroup($eventId, 0, 1); // Bitmaske für Montag
-            IPS_SetEventScheduleGroupPoint($eventId, 0, 0, 4 * 3600, 1); // Index 0, 04:00 Uhr, Aktion „Ein“
+            IPS_SetEventScheduleGroupPoint($eventId, 0, 4 * 3600, 1); // Index 0, 04:00 Uhr, Aktion „Ein“
 
             // Zielvariable zuweisen
             IPS_SetEventScheduleTarget($eventId, $this->GetIDForIdent('Irrigation'));
