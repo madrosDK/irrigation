@@ -4,75 +4,79 @@ declare(strict_types=1);
 
 class IrrigationController extends IPSModule
 {
-    public function Create()
-    {
-        parent::Create();
+  public function Create()
+  {
+      parent::Create();
 
-        // Properties
-        $this->RegisterPropertyInteger('MoistureSensor1', 0);
-        $this->RegisterPropertyInteger('MoistureSensor2', 0);
-        $this->RegisterPropertyInteger('RainLast24h', 0);
-        $this->RegisterPropertyInteger('Valve1', 0);
-        $this->RegisterPropertyInteger('Valve2', 0);
-        $this->RegisterPropertyInteger('Pump', 0);
+      // === Properties ===
+      $this->RegisterPropertyInteger('MoistureSensor1', 0);
+      $this->RegisterPropertyInteger('MoistureSensor2', 0);
+      $this->RegisterPropertyInteger('RainLast24h', 0);
+      $this->RegisterPropertyInteger('Valve1', 0);
+      $this->RegisterPropertyInteger('Valve2', 0);
+      $this->RegisterPropertyInteger('Pump', 0);
 
-        $this->RegisterPropertyInteger('Mode', 0);
-        $this->RegisterPropertyInteger('Duration', 5);
-        $this->RegisterPropertyInteger('MoistureThreshold', 50);
+      $this->RegisterPropertyInteger('Mode', 0);
+      $this->RegisterPropertyInteger('Duration', 5);
+      $this->RegisterPropertyInteger('MoistureThreshold', 50);
 
-        // Profile
-        if (!IPS_VariableProfileExists('IRR.Mode')) {
-            IPS_CreateVariableProfile('IRR.Mode', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileValues('IRR.Mode', 0, 3, 1);
-            IPS_SetVariableProfileAssociation('IRR.Mode', 0, 'Aus', '', 0x000000);
-            IPS_SetVariableProfileAssociation('IRR.Mode', 1, 'Manuell', '', 0x808080);
-            IPS_SetVariableProfileAssociation('IRR.Mode', 2, 'Zeitsteuerung', '', 0xFFFF00);
-            IPS_SetVariableProfileAssociation('IRR.Mode', 3, 'Automatik', '', 0x00FF00);
-        }
+      // === Profile ===
+      if (!IPS_VariableProfileExists('IRR.Mode')) {
+          IPS_CreateVariableProfile('IRR.Mode', VARIABLETYPE_INTEGER);
+          IPS_SetVariableProfileValues('IRR.Mode', 0, 3, 1);
+          IPS_SetVariableProfileAssociation('IRR.Mode', 0, 'Aus', '', 0x000000);
+          IPS_SetVariableProfileAssociation('IRR.Mode', 1, 'Manuell', '', 0x808080);
+          IPS_SetVariableProfileAssociation('IRR.Mode', 2, 'Zeitsteuerung', '', 0xFFFF00);
+          IPS_SetVariableProfileAssociation('IRR.Mode', 3, 'Automatik', '', 0x00FF00);
+      }
 
-        if (!IPS_VariableProfileExists('IRR.Duration')) {
-            IPS_CreateVariableProfile('IRR.Duration', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileValues('IRR.Duration', 1, 120, 1);
-            IPS_SetVariableProfileText('IRR.Duration', '', ' Min');
-        }
+      if (!IPS_VariableProfileExists('IRR.Duration')) {
+          IPS_CreateVariableProfile('IRR.Duration', VARIABLETYPE_INTEGER);
+          IPS_SetVariableProfileValues('IRR.Duration', 1, 120, 1);
+          IPS_SetVariableProfileText('IRR.Duration', '', ' Min');
+      }
 
-        if (!IPS_VariableProfileExists('IRR.MoistureThreshold')) {
-            IPS_CreateVariableProfile('IRR.MoistureThreshold', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileValues('IRR.MoistureThreshold', 1, 100, 1);
-            IPS_SetVariableProfileText('IRR.MoistureThreshold', '', ' %');
-        }
+      if (!IPS_VariableProfileExists('IRR.MoistureThreshold')) {
+          IPS_CreateVariableProfile('IRR.MoistureThreshold', VARIABLETYPE_INTEGER);
+          IPS_SetVariableProfileValues('IRR.MoistureThreshold', 1, 100, 1);
+          IPS_SetVariableProfileText('IRR.MoistureThreshold', '', ' %');
+      }
 
-        if (!IPS_VariableProfileExists('IRR.Irrigation')) {
-            IPS_CreateVariableProfile('IRR.Irrigation', VARIABLETYPE_BOOLEAN);
-            IPS_SetVariableProfileAssociation('IRR.Irrigation', false, 'Aus', '', 0xFF0000);
-            IPS_SetVariableProfileAssociation('IRR.Irrigation', true, 'Ein', '', 0x00FF00);
-        }
+      if (!IPS_VariableProfileExists('IRR.Irrigation')) {
+          IPS_CreateVariableProfile('IRR.Irrigation', VARIABLETYPE_BOOLEAN);
+          IPS_SetVariableProfileAssociation('IRR.Irrigation', false, 'Aus', '', 0xFF0000);
+          IPS_SetVariableProfileAssociation('IRR.Irrigation', true, 'Ein', '', 0x00FF00);
+      }
 
-        // Variablen
-        $this->RegisterVariableInteger('Mode', 'Betriebsmodus', 'IRR.Mode', 10);
-        $this->RegisterVariableInteger('Duration', 'Dauer (Min)', 'IRR.Duration', 20);
-        $this->RegisterVariableInteger('MoistureThreshold', 'Feuchteschwelle (%)', 'IRR.MoistureThreshold', 30);
-        $this->RegisterVariableBoolean('Irrigation', 'Beregnung', 'IRR.Irrigation', 40);
+      // === Variablen nur registrieren, wenn sie fehlen ===
+      $this->RegisterVariableIfMissing('Mode', 'Betriebsmodus', 'IRR.Mode', 10);
+      $this->RegisterVariableIfMissing('Duration', 'Dauer (Min)', 'IRR.Duration', 20);
+      $this->RegisterVariableIfMissing('MoistureThreshold', 'Feuchteschwelle (%)', 'IRR.MoistureThreshold', 30);
+      $this->RegisterVariableIfMissing('Irrigation', 'Beregnung', 'IRR.Irrigation', 40);
 
-        $this->EnableAction('Mode');
-        $this->EnableAction('Duration');
-        $this->EnableAction('MoistureThreshold');
-        $this->EnableAction('Irrigation');
+      // === Aktionen aktivieren ===
+      foreach (['Mode', 'Duration', 'MoistureThreshold', 'Irrigation'] as $ident) {
+          $this->EnableAction($ident);
+      }
 
-        // Timer
-        $this->RegisterTimer('IrrigationTimer', 0, 'IRR_RequestAction($_IPS["TARGET"], "Irrigation", false);');
+      // === Timer anlegen ===
+      if (!@IPS_GetObjectIDByIdent('IrrigationTimer', $this->InstanceID)) {
+          $this->RegisterTimer('IrrigationTimer', 0, 'IRR_RequestAction($_IPS["TARGET"], "Irrigation", false);');
+      }
 
-        if ($this->GetBuffer('Initialized') !== '1') {
-            $this->SetValue('Mode', $this->ReadPropertyInteger('Mode'));
-            $this->SetValue('Duration', $this->ReadPropertyInteger('Duration'));
-            $this->SetValue('MoistureThreshold', $this->ReadPropertyInteger('MoistureThreshold'));
-            $this->SetBuffer('Initialized', '1');
-        }
+      // === Initialwerte setzen, aber nur beim ersten Erstellen ===
+      if ($this->GetBuffer('Initialized') !== '1') {
+          $this->SetValue('Mode', $this->ReadPropertyInteger('Mode'));
+          $this->SetValue('Duration', $this->ReadPropertyInteger('Duration'));
+          $this->SetValue('MoistureThreshold', $this->ReadPropertyInteger('MoistureThreshold'));
+          $this->SetBuffer('Initialized', '1');
+      }
 
-        // Wochenpläne
-        $this->CreateWeekplan('ScheduleTimer', true);   // Zeitsteuerung
-        $this->CreateWeekplan('ScheduleAuto', false);   // Automatik
-    }
+      // === Wochenpläne erstellen ===
+      $this->CreateWeekplan('ScheduleTimer', true);   // Zeitsteuerung
+      $this->CreateWeekplan('ScheduleAuto', false);   // Automatik
+  }
+
 
     public function ApplyChanges()
     {
@@ -87,6 +91,18 @@ class IrrigationController extends IPSModule
         if ($idTimer !== false) IPS_SetEventActive($idTimer, $mode === 2);
         if ($idAuto !== false) IPS_SetEventActive($idAuto, $mode === 3);
     }
+
+    private function RegisterVariableIfMissing(string $ident, string $name, string $profile, int $position)
+    {
+        if (@$this->GetIDForIdent($ident) === false) {
+            $this->RegisterVariable(VARIABLETYPE_BOOLEAN, $ident, $name, $profile, $position);
+            if ($profile !== '') {
+                IPS_SetVariableCustomProfile($this->GetIDForIdent($ident), $profile);
+            }
+        }
+    }
+
+
     public function RequestAction($ident, $value)
     {
         switch ($ident) {
