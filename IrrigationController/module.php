@@ -82,12 +82,33 @@ class IrrigationController extends IPSModule
             IPS_SetParent($eventId, $varId);
             IPS_SetEventActive($eventId, true);
 
+            // Aktionen
             IPS_SetEventScheduleAction($eventId, 0, 'Aus', 0xFF0000, false);
             IPS_SetEventScheduleAction($eventId, 1, 'Ein', 0x00FF00, true);
 
-            IPS_SetEventScheduleGroup($eventId, 0, 1); // Montag
-            IPS_SetEventScheduleGroupPoint($eventId, 0, 0, 4, 0, 0, 1); // 04:00 → Ein
+            // Alle 7 Gruppen vorbereiten (auch wenn leer)
+            $weekdays = [
+                0 => 1,     // Montag
+                1 => 2,     // Dienstag
+                2 => 4,     // Mittwoch
+                3 => 8,     // Donnerstag
+                4 => 16,    // Freitag
+                5 => 32,    // Samstag
+                6 => 64     // Sonntag
+            ];
+
+            foreach ($weekdays as $groupId => $bitmask) {
+                IPS_SetEventScheduleGroup($eventId, $groupId, $bitmask);
+            }
+
+            // Nur Dienstag (1) und Donnerstag (3) belegen
+            foreach ([1, 3] as $groupId) {
+                IPS_SetEventScheduleGroupPoint($eventId, $groupId, 0, 0, 0, 0, 0);     // 00:00 Aus
+                IPS_SetEventScheduleGroupPoint($eventId, $groupId, 1, 3, 0, 0, 1);     // 03:00 Ein
+                IPS_SetEventScheduleGroupPoint($eventId, $groupId, 2, 3, 30, 0, 0);    // 03:30 Aus
+            }
         }
+
     }
 
     public function ApplyChanges()
