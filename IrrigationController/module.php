@@ -16,11 +16,11 @@ class IrrigationController extends IPSModule
         $this->RegisterPropertyInteger('Valve2', 0);
         $this->RegisterPropertyInteger('Pump', 0);
 
-        $this->RegisterPropertyInteger('Mode', 0); // 0=Aus, 1=Manuell, 2=Zeitsteuerung, 3=Automatik
+        $this->RegisterPropertyInteger('Mode', 0);
         $this->RegisterPropertyInteger('Duration', 5);
         $this->RegisterPropertyInteger('MoistureThreshold', 50);
 
-        // Profiles
+        // Profile
         if (!IPS_VariableProfileExists('IRR.Mode')) {
             IPS_CreateVariableProfile('IRR.Mode', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileValues('IRR.Mode', 0, 3, 1);
@@ -48,13 +48,12 @@ class IrrigationController extends IPSModule
             IPS_SetVariableProfileAssociation('IRR.Irrigation', true, 'Ein', '', 0x00FF00);
         }
 
-        // Variables
+        // Variablen
         $this->RegisterVariableInteger('Mode', 'Betriebsmodus', 'IRR.Mode', 10);
         $this->RegisterVariableInteger('Duration', 'Dauer (Min)', 'IRR.Duration', 20);
         $this->RegisterVariableInteger('MoistureThreshold', 'Feuchteschwelle (%)', 'IRR.MoistureThreshold', 30);
         $this->RegisterVariableBoolean('Irrigation', 'Beregnung', 'IRR.Irrigation', 40);
 
-        // Enable Action
         $this->EnableAction('Mode');
         $this->EnableAction('Duration');
         $this->EnableAction('MoistureThreshold');
@@ -63,7 +62,6 @@ class IrrigationController extends IPSModule
         // Timer
         $this->RegisterTimer('IrrigationTimer', 0, 'IRR_RequestAction($_IPS["TARGET"], "Irrigation", false);');
 
-        // Initialwerte nur beim ersten Anlegen setzen
         if ($this->GetBuffer('Initialized') !== '1') {
             $this->SetValue('Mode', $this->ReadPropertyInteger('Mode'));
             $this->SetValue('Duration', $this->ReadPropertyInteger('Duration'));
@@ -71,138 +69,126 @@ class IrrigationController extends IPSModule
             $this->SetBuffer('Initialized', '1');
         }
 
-        // Wochenplan an Variable "Irrigation" hängen
-        $varId = $this->GetIDForIdent('Irrigation');
-        $eventName = 'IrrigationSchedule';
-
-        $eventId = @IPS_GetEventIDByName($eventName, $varId);
-        if ($eventId === false) {
-            $eventId = IPS_CreateEvent(2); // Wochenplan
-            IPS_SetName($eventId, $eventName);
-            IPS_SetParent($eventId, $varId);
-            IPS_SetEventActive($eventId, true);
-
-            // Aktionen definieren
-            IPS_SetEventScheduleAction($eventId, 0, 'Aus', 0xFF0000, false);
-            IPS_SetEventScheduleAction($eventId, 1, 'Ein', 0x00FF00, true);
-
-            // Bitmasken für Wochentage
-            $weekdays = [
-                0 => 1,     // Montag
-                1 => 2,     // Dienstag
-                2 => 4,     // Mittwoch
-                3 => 8,     // Donnerstag
-                4 => 16,    // Freitag
-                5 => 32,    // Samstag
-                6 => 64     // Sonntag
-            ];
-
-            foreach ($weekdays as $groupId => $bitmask) {
-                IPS_SetEventScheduleGroup($eventId, $groupId, $bitmask);
-            }
-
-            // Dienstag & Donnerstag → 3 Zeitpunkte
-            foreach ([1, 3] as $groupId) {
-                IPS_SetEventScheduleGroupPoint($eventId, $groupId, 0, 0, 0, 0, 0);     // 00:00 Aus
-                IPS_SetEventScheduleGroupPoint($eventId, $groupId, 1, 3, 0, 0, 1);     // 03:00 Ein
-                IPS_SetEventScheduleGroupPoint($eventId, $groupId, 2, 3, 30, 0, 0);    // 03:30 Aus
-            }
-
-            // Alle übrigen Tage (außer 1, 3) → nur 00:00 Aus
-            foreach ([0, 2, 4, 5, 6] as $groupId) {
-                IPS_SetEventScheduleGroupPoint($eventId, $groupId, 0, 0, 0, 0, 0);     // 00:00 Aus
-            }
-        }
-
-
+        // Wochenpläne
+        $this->CreateWeekplan('ScheduleTimer', true);   // Zeitsteuerung
+        $this->CreateWeekplan('ScheduleAuto', false);   // Automatik
     }
 
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
-        // Wochenplan-Ereignis aktivieren/deaktivieren je nach Modus
         $mode = $this->GetValue('Mode');
-        $varId = $this->GetIDForIdent('Irrigation');
-        $eventId = @IPS_GetEventIDByName('IrrigationSchedule', $varId);
-        if ($eventId !== false) {
-            IPS_SetEventActive($eventId, in_array($mode, [2, 3]));
-        }
-    }
 
-    public function RequestAction($Ident, $Value)
+        $idTimer = @IPS_GetEventIDByName('ScheduleTimer', $this->GetIDForIdent('Irrigation'));
+        $idAuto = @IPS_GetEventIDByName('ScheduleAuto', $this->InstanceID);
+
+        if ($idTimer !== false) IPS_SetHidden($idTimer, $mode !== 2);
+        if ($idAuto !== false) IPS_SetHidden($idAuto, $mode !== 3);
+        if ($idTimer !== false) IPS_SetEventActive($idTimer, $mode === 2);
+        if ($idAuto !== false) IPS_SetEventActive($idAuto, $mode === 3);
+    }
+    public function RequestAction($ident, $value)
     {
-        switch ($Ident) {
+        switch ($ident) {
             case 'Mode':
-                $this->SetValue('Mode', $Value);
-                $this->ApplyChanges();
+                $this->SetValue('Mode', $value);
+                $this->ApplyChanges(); // Sichtbarkeit der Wochenpläne anpassen
                 break;
 
             case 'Duration':
-                $this->SetValue('Duration', $Value);
-                if ($this->GetValue('Irrigation')) {
-                    $start = intval($this->GetBuffer('IrrigationStart'));
-                    $elapsed = time() - $start;
-                    $remaining = max(0, $Value * 60 - $elapsed);
-                    $this->SetTimerInterval('IrrigationTimer', $remaining * 1000);
-                }
+                $this->SetValue('Duration', $value);
                 break;
 
             case 'MoistureThreshold':
-                $this->SetValue('MoistureThreshold', $Value);
+                $this->SetValue('MoistureThreshold', $value);
                 break;
 
             case 'Irrigation':
-                if ($Value) {
-                    // Start
-                    $this->SetValue('Irrigation', true);
-                    $this->SetBuffer('IrrigationStart', (string)time());
-
-                    foreach (['Pump','Valve1','Valve2'] as $prop) {
-                        $id = $this->ReadPropertyInteger($prop);
-                        if ($id > 0) {
-                            @RequestAction($id, true);
-                        }
-                    }
-
-                    $interval = $this->GetValue('Duration') * 60 * 1000;
-                    $this->SetTimerInterval('IrrigationTimer', $interval);
+                $this->SetValue('Irrigation', $value);
+                $this->SwitchActuators($value);
+                if ($value) {
+                    $remaining = $this->GetValue('Duration') * 60;
+                    $this->SetTimerInterval('IrrigationTimer', $remaining * 1000);
                 } else {
-                    // Stopp
                     $this->SetTimerInterval('IrrigationTimer', 0);
-
-                    foreach (['Pump','Valve1','Valve2'] as $prop) {
-                        $id = $this->ReadPropertyInteger($prop);
-                        if ($id > 0) {
-                            @RequestAction($id, false);
-                        }
-                    }
-
-                    $this->SetValue('Irrigation', false);
                 }
                 break;
         }
     }
 
-    public function CheckAndIrrigate()
+    private function SwitchActuators(bool $state)
     {
-        if ($this->GetValue('Mode') !== 3) {
-            return;
+        foreach (['Valve1', 'Valve2', 'Pump'] as $ident) {
+            $id = $this->ReadPropertyInteger($ident);
+            if ($id > 0) {
+                @RequestAction($id, $state);
+            }
         }
-        if ($this->ShouldWater()) {
+    }
+
+    public function EvaluateAutomatic()
+    {
+        $threshold = $this->GetValue('MoistureThreshold');
+        $id1 = $this->ReadPropertyInteger('MoistureSensor1');
+        $id2 = $this->ReadPropertyInteger('MoistureSensor2');
+        $moisture1 = ($id1 > 0) ? @GetValue($id1) : null;
+        $moisture2 = ($id2 > 0) ? @GetValue($id2) : null;
+
+        $underThreshold = false;
+        if (!is_null($moisture1) && $moisture1 < $threshold) {
+            $underThreshold = true;
+        }
+        if (!is_null($moisture2) && $moisture2 < $threshold) {
+            $underThreshold = true;
+        }
+
+        if ($underThreshold) {
             $this->RequestAction('Irrigation', true);
         }
     }
 
-    private function ShouldWater(): bool
+    private function CreateWeekplan(string $name, bool $linkToVariable)
     {
-        $threshold = $this->GetValue('MoistureThreshold');
-        foreach (['MoistureSensor1','MoistureSensor2'] as $prop) {
-            $id = $this->ReadPropertyInteger($prop);
-            if ($id > 0 && is_numeric(GetValue($id)) && GetValue($id) < $threshold) {
-                return true;
+        $parent = $linkToVariable ? $this->GetIDForIdent('Irrigation') : $this->InstanceID;
+        $id = @IPS_GetEventIDByName($name, $parent);
+        if ($id === false) {
+            $id = IPS_CreateEvent(2); // Wochenplan
+            IPS_SetName($id, $name);
+            IPS_SetParent($id, $parent);
+            IPS_SetEventActive($id, true);
+            IPS_SetHidden($id, true);
+
+            IPS_SetEventScheduleAction($id, 0, 'Aus', 0xFF0000, false);
+            IPS_SetEventScheduleAction($id, 1, 'Ein', 0x00FF00, true);
+
+            for ($i = 0; $i <= 6; $i++) {
+                $bitmask = 1 << $i;
+                IPS_SetEventScheduleGroup($id, $i, $bitmask);
+            }
+
+            if ($linkToVariable) {
+                foreach ([1, 3] as $grp) {
+                    IPS_SetEventScheduleGroupPoint($id, $grp, 0, 0, 0, 0, 0);
+                    IPS_SetEventScheduleGroupPoint($id, $grp, 1, 3, 0, 0, 1);
+                    IPS_SetEventScheduleGroupPoint($id, $grp, 2, 3, 30, 0, 0);
+                }
+                foreach ([0, 2, 4, 5, 6] as $grp) {
+                    IPS_SetEventScheduleGroupPoint($id, $grp, 0, 0, 0, 0, 0);
+                }
+            } else {
+                // Automatik: ruft EvaluateAutomatic() bei EIN-Zeitpunkt auf
+                IPS_SetEventCyclic($id, 0, 0, 0, 0, 0);
+                IPS_SetEventCyclicDateFrom($id, 0, 0, 0);
+                IPS_SetEventCyclicDateTo($id, 0, 0, 0);
+                IPS_SetEventCyclicTimeFrom($id, 0, 0, 0);
+                IPS_SetEventCyclicTimeTo($id, 23, 59, 59);
+                IPS_SetEventScript($id, "IPS_GetInstance($this->InstanceID)['ModuleInfo']['ModuleName'];\nIPS_RunScriptText('<?php IRR_EvaluateAutomatic(' . $this->InstanceID . '); ?>');");
+
+                // Auch hier EIN-Zeiten Dienstag und Donnerstag
+                foreach ([1, 3] as $grp) {
+                    IPS_SetEventScheduleGroupPoint($id, $grp, 0, 3, 0, 0, 1);
+                }
             }
         }
-        return false;
     }
 }
