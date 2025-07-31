@@ -49,10 +49,11 @@ class IrrigationController extends IPSModule
       }
 
       // === Variablen nur registrieren, wenn sie fehlen ===
-      $this->RegisterVariableIfMissing('Mode', 'Betriebsmodus', 'IRR.Mode', 10);
-      $this->RegisterVariableIfMissing('Duration', 'Dauer (Min)', 'IRR.Duration', 20);
-      $this->RegisterVariableIfMissing('MoistureThreshold', 'Feuchteschwelle (%)', 'IRR.MoistureThreshold', 30);
-      $this->RegisterVariableIfMissing('Irrigation', 'Beregnung', 'IRR.Irrigation', 40);
+      $this->RegisterVariableIfMissing('Mode', 'Betriebsmodus', 'IRR.Mode', 10, VARIABLETYPE_INTEGER);
+      $this->RegisterVariableIfMissing('Duration', 'Dauer (Min)', 'IRR.Duration', 20, VARIABLETYPE_INTEGER);
+      $this->RegisterVariableIfMissing('MoistureThreshold', 'Feuchteschwelle (%)', 'IRR.MoistureThreshold', 30, VARIABLETYPE_INTEGER);
+      $this->RegisterVariableIfMissing('Irrigation', 'Beregnung', 'IRR.Irrigation', 40, VARIABLETYPE_BOOLEAN);
+
 
       // === Aktionen aktivieren ===
       foreach (['Mode', 'Duration', 'MoistureThreshold', 'Irrigation'] as $ident) {
