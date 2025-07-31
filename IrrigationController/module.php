@@ -123,13 +123,34 @@ class IrrigationController extends IPSModule
     {
         switch ($Ident) {
             case 'Mode':
-            case 'Duration':
-            case 'MoistureThreshold':
-                $this->SetValue($Ident, $Value);
+                $this->SetValue('Mode', $Value);
+                if ($Value == 0) {
+                    // Bei Modus "Aus" alles stoppen
+                    $this->SetValue('Irrigation', false);
+                    $this->SetTimerInterval('IrrigationTimer', 0);
+                }
                 $this->ApplyChanges();
                 break;
+
+            case 'Duration':
+                $this->SetValue('Duration', $Value);
+                // Timerlaufzeit ggf. neu berechnen
+                if ($this->GetValue('Irrigation')) {
+                    $startTime = intval($this->GetBuffer('IrrigationStart'));
+                    $now = time();
+                    $elapsed = intval(($now - $startTime) / 60);
+                    $remaining = max(0, $Value - $elapsed);
+                    $this->SetTimerInterval('IrrigationTimer', $remaining * 60 * 1000);
+                }
+                break;
+
+            case 'MoistureThreshold':
+                $this->SetValue('MoistureThreshold', $Value);
+                break;
+
             case 'Irrigation':
                 if ($Value) {
+                    $this->SetBuffer('IrrigationStart', (string)time());
                     $duration = $this->GetValue('Duration');
                     $this->SetTimerInterval('IrrigationTimer', $duration * 60 * 1000);
                 } else {
@@ -139,6 +160,31 @@ class IrrigationController extends IPSModule
                 break;
         }
     }
+
+
+    public function GetConfigurationForm()
+{
+    $mode = $this->GetValue('Mode');
+
+    $form = json_decode(file_get_contents(__DIR__ . "/form.json"), true);
+
+    foreach ($form['elements'] as &$element) {
+        switch ($element['name']) {
+            case 'Duration':
+                $element['visible'] = ($mode == 1); // nur manuell
+                break;
+            case 'MoistureThreshold':
+                $element['visible'] = ($mode == 2 || $mode == 3); // nur Zeit/Automatik
+                break;
+            case 'Irrigation':
+                $element['visible'] = ($mode != 0); // nicht bei AUS
+                break;
+        }
+    }
+
+    return json_encode($form);
+}
+
 
     public function StopIrrigation()
     {
