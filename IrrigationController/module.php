@@ -69,16 +69,20 @@ class IrrigationController extends IPSModule
             IPS_SetParent($eventId, $this->InstanceID);
             IPS_SetName($eventId, $eventName);
             IPS_SetEventActive($eventId, false);
-            IPS_SetEventTrigger($eventId, 1, $this->GetIDForIdent('Irrigation')); // auf Variable „Irrigation“
+            IPS_SetEventScheduleUseSun($eventId, false);
 
-            // Aktionen definieren
-            IPS_SetEventScheduleAction($eventId, 0, 'Aus', 0xFF0000);
-            IPS_SetEventScheduleAction($eventId, 1, 'Ein', 0x00FF00);
+            // Aktionen definieren: 0 = Aus, 1 = Ein
+            IPS_SetEventScheduleAction($eventId, 0, 'Aus', 0xFF0000, false);
+            IPS_SetEventScheduleAction($eventId, 1, 'Ein', 0x00FF00, true);
 
             // Gruppe 0 = Montag
             IPS_SetEventScheduleGroup($eventId, 0, 1); // Bitmaske: Montag
-            IPS_SetEventScheduleGroupPoint($eventId, 0, 4*3600, 1); // 04:00 Uhr, Aktion „Ein“
+            IPS_SetEventScheduleGroupPoint($eventId, 0, 4 * 3600, 1); // 04:00 Uhr → Aktion "Ein"
+
+            // Zielvariable zuweisen
+            IPS_SetEventScheduleTarget($eventId, $this->GetIDForIdent('Irrigation'));
         }
+
 
     }
 
