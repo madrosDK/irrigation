@@ -34,7 +34,7 @@ class IrrigationController extends IPSModule
         $this->CreateWeekplan('ScheduleAuto');
 
         // Timer für Rücksetzung nach Dauer
-        $this->RegisterTimer('IrrigationTimer', 0, 'IRR_StopIrrigation($_IPS['TARGET']);');
+        $this->RegisterTimer('IrrigationTimer', 0, 'IRR_StopIrrigation($_IPS[\'TARGET\']);');
 
         // Nur beim ersten Mal Standard setzen
         if ($this->GetBuffer('Initialized') !== '1') {
