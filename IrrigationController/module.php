@@ -92,15 +92,27 @@ class IrrigationController extends IPSModule
         if ($idAuto !== false) IPS_SetEventActive($idAuto, $mode === 3);
     }
 
-    private function RegisterVariableIfMissing(string $ident, string $name, string $profile, int $position)
+    private function RegisterVariableIfMissing(string $ident, string $name, string $profile, int $position, int $type = VARIABLETYPE_INTEGER)
     {
         if (@$this->GetIDForIdent($ident) === false) {
-            $this->RegisterVariable(VARIABLETYPE_BOOLEAN, $ident, $name, $profile, $position);
-            if ($profile !== '') {
-                IPS_SetVariableCustomProfile($this->GetIDForIdent($ident), $profile);
+            switch ($type) {
+                case VARIABLETYPE_BOOLEAN:
+                    $this->RegisterVariableBoolean($ident, $name, $profile, $position);
+                    break;
+                case VARIABLETYPE_INTEGER:
+                    $this->RegisterVariableInteger($ident, $name, $profile, $position);
+                    break;
+                case VARIABLETYPE_FLOAT:
+                    $this->RegisterVariableFloat($ident, $name, $profile, $position);
+                    break;
+                case VARIABLETYPE_STRING:
+                    $this->RegisterVariableString($ident, $name, $profile, $position);
+                    break;
             }
+            $this->EnableAction($ident);
         }
     }
+
 
 
     public function RequestAction($ident, $value)
