@@ -79,7 +79,7 @@ class IrrigationController extends IPSModule
             IPS_SetEventScheduleGroupPoint($eventId, 0, 0, 4, 0, 0, 1); // 04:00 Uhr → Aktion "Ein"
 
             // Zielvariable zuweisen
-            IPS_SetEventScheduleTarget($eventId, $this->GetIDForIdent('Irrigation'));
+            IPS_SetEventTriggerTargetID($eventId, $this->GetIDForIdent('Irrigation')); // ✅
         }
 
 
