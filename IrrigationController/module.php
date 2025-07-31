@@ -18,7 +18,7 @@ class IrrigationController extends IPSModule
 
         $this->RegisterPropertyInteger('Mode',               0);  // 0=Aus,1=Manuell,2=Zeitsteuerung,3=Automatik
         $this->RegisterPropertyInteger('Duration',           5);  // Standarddauer in Minuten
-        $this->RegisterPropertyInteger('MoistureThreshold', 50);  // Standard-Schwelle in %
+        $this->RegisterPropertyInteger('MoistureThreshold',50);  // Standard-Schwelle in %
 
         //--- Profiles ---
         if (IPS_VariableProfileExists('IRR.Mode')) {
@@ -48,39 +48,39 @@ class IrrigationController extends IPSModule
         }
 
         //--- Variables ---
-        $this->RegisterVariableInteger('Mode',               'Betriebsmodus',      'IRR.Mode',           10);
-        $this->RegisterVariableInteger('Duration',           'Dauer (Min)',        'IRR.Duration',       20);
-        $this->RegisterVariableInteger('MoistureThreshold',  'Feuchteschwelle (%)','IRR.MoistureThreshold',30);
-        $this->RegisterVariableBoolean('Irrigation',         'Beregnung',          'IRR.Irrigation',     40);
+        $this->RegisterVariableInteger('Mode',               'Betriebsmodus',       'IRR.Mode',            10);
+        $this->RegisterVariableInteger('Duration',           'Dauer (Min)',         'IRR.Duration',        20);
+        $this->RegisterVariableInteger('MoistureThreshold',  'Feuchteschwelle (%)', 'IRR.MoistureThreshold',30);
+        $this->RegisterVariableBoolean('Irrigation',         'Beregnung',           'IRR.Irrigation',      40);
 
-        // Enable web editing
         $this->EnableAction('Mode');
         $this->EnableAction('Duration');
         $this->EnableAction('MoistureThreshold');
         $this->EnableAction('Irrigation');
 
-        //--- Duration timer for irrigation stop ---
-        // Calls RequestAction("Irrigation", false) when time expires
+        //--- Timer: schaltet nach Duration wieder ab ---
         $this->RegisterTimer('IrrigationTimer', 0, 'IRR_RequestAction($_IPS["TARGET"], "Irrigation", false);');
 
-        //--- Weekly schedule event (configured in UI) ---
+        //--- Wochenplan-Event (Typ 2 = Schedule Event) ---
         $eventName = 'IrrigationSchedule_' . $this->InstanceID;
-        $eventId   = @IPS_GetObjectIDByName($eventName, $this->InstanceID);
+        $eventId   = @IPS_GetEventIDByName($eventName, $this->InstanceID);
         if ($eventId === false) {
-            $eventId = IPS_CreateEvent(1); // 1 = cyclic event
+            // 2 = Schedule (Wochenplan)
+            $eventId = IPS_CreateEvent(2);
             IPS_SetParent($eventId, $this->InstanceID);
-            // Weekly event should trigger irrigation
-            IPS_SetEventScript($eventId, 'IRR_RequestAction(' . $this->InstanceID . ',"Irrigation",true);');
             IPS_SetName($eventId, $eventName);
             IPS_SetEventActive($eventId, false);
+            // Standard-Gruppe für Montag (Gruppe 0) anlegen
+            IPS_SetEventScheduleGroup($eventId, 0, 1);         // Montag: Mask = 1
+            IPS_SetEventScheduleGroupPoint($eventId, 0, 4*3600, true); // 04:00 Uhr → Irrigation = true
+            // Hinweis: Abschalten übernimmt der interne Timer
         }
     }
 
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-
-        //--- One-time initialization of variable values ---
+        // Initialisierung nur einmal
         if ($this->GetBuffer('Initialized') !== '1') {
             $this->SetValue('Mode',              $this->ReadPropertyInteger('Mode'));
             $this->SetValue('Duration',          $this->ReadPropertyInteger('Duration'));
@@ -88,11 +88,11 @@ class IrrigationController extends IPSModule
             $this->SetValue('Irrigation',        false);
             $this->SetBuffer('Initialized', '1');
         }
-
-        //--- Activate/Deactivate weekly schedule event based on mode ---
+        // Wochenplan aktivieren/deaktivieren je nach Modus
         $mode    = $this->GetValue('Mode');
-        $eventId = IPS_GetObjectIDByName('IrrigationSchedule_' . $this->InstanceID, $this->InstanceID);
+        $eventId = IPS_GetEventIDByName('IrrigationSchedule_' . $this->InstanceID, $this->InstanceID);
         if ($eventId !== false) {
+            // Mode 2 & 3 erlauben Wochenplan
             IPS_SetEventActive($eventId, in_array($mode, [2, 3]));
         }
     }
@@ -106,11 +106,11 @@ class IrrigationController extends IPSModule
                 break;
 
             case 'Duration':
-                // Adjust remaining timer if currently irrigating
                 $this->SetValue('Duration', $Value);
+                // während laufender Beregnung Restzeit anpassen
                 if ($this->GetValue('Irrigation')) {
-                    $start   = intval($this->GetBuffer('IrrigationStart'));
-                    $elapsed = time() - $start;
+                    $start     = (int)$this->GetBuffer('IrrigationStart');
+                    $elapsed   = time() - $start;
                     $remaining = max(0, $Value * 60 - $elapsed);
                     $this->SetTimerInterval('IrrigationTimer', $remaining * 1000);
                 }
@@ -122,25 +122,19 @@ class IrrigationController extends IPSModule
 
             case 'Irrigation':
                 if ($Value) {
-                    // Start irrigation
+                    // manuell oder durch Wochenplan gestartet
                     $this->SetValue('Irrigation', true);
-                    // Record start time
                     $this->SetBuffer('IrrigationStart', (string)time());
-                    // Switch on actuators
                     foreach (['Pump','Valve1','Valve2'] as $prop) {
                         $id = $this->ReadPropertyInteger($prop);
                         if ($id > 0) {
                             IPS_RequestAction($id, true);
                         }
                     }
-                    // Schedule stop based on current Duration
-                    $interval = $this->GetValue('Duration') * 60 * 1000;
-                    $this->SetTimerInterval('IrrigationTimer', $interval);
-                    // Also cancel any scheduled weekly irrigation
-                    $this->SetValue('Mode', 0);
-                    $this->ApplyChanges();
+                    // Timer starten
+                    $this->SetTimerInterval('IrrigationTimer', $this->GetValue('Duration') * 60 * 1000);
                 } else {
-                    // Stop irrigation immediately
+                    // sofort abbrechen
                     $this->SetTimerInterval('IrrigationTimer', 0);
                     foreach (['Pump','Valve1','Valve2'] as $prop) {
                         $id = $this->ReadPropertyInteger($prop);
@@ -159,12 +153,11 @@ class IrrigationController extends IPSModule
 
     public function CheckAndIrrigate()
     {
-        // Only for Automatik mode (3)
+        // nur im Automatikmodus
         if ($this->GetValue('Mode') !== 3) {
             return;
         }
         if ($this->ShouldWater()) {
-            // Trigger as if user toggled irrigation on
             $this->RequestAction('Irrigation', true);
         }
     }
