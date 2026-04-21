@@ -9,7 +9,6 @@
           "type": "Select",
           "caption": "Betriebsmodus",
           "options": [
-            { "caption": "Aus", "value": 0 },
             { "caption": "Manuell", "value": 1 },
             { "caption": "Zeitsteuerung", "value": 2 },
             { "caption": "Automatik", "value": 3 }
@@ -110,10 +109,6 @@
       "type": "Button",
       "caption": "Beregnung stoppen",
       "onClick": "IRR_StopIrrigation($id);"
-    },
-    {
-      "type": "Label",
-      "caption": "Im Objektbaum werden aktuelle Sensorwerte, Betriebsdaten und eine HTML-Übersicht angezeigt."
     }
   ],
   "status": [

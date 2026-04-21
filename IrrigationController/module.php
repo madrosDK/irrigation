@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 class IrrigationController extends IPSModule
 {
-    private const MODE_OFF = 0;
     private const MODE_MANUAL = 1;
     private const MODE_TIME = 2;
     private const MODE_AUTO = 3;
@@ -13,8 +12,7 @@ class IrrigationController extends IPSModule
     {
         parent::Create();
 
-        // Properties
-        $this->RegisterPropertyInteger('Mode', self::MODE_OFF);
+        $this->RegisterPropertyInteger('Mode', self::MODE_MANUAL);
         $this->RegisterPropertyInteger('Duration', 10);
         $this->RegisterPropertyInteger('MoistureThreshold', 35);
         $this->RegisterPropertyInteger('RainThreshold24h', 5);
@@ -32,7 +30,6 @@ class IrrigationController extends IPSModule
 
         $this->RegisterProfiles();
 
-        // Variables visible in frontend / object tree
         $this->RegisterVariableInteger('Mode', 'Betriebsmodus', 'IRR.Mode', 10);
         $this->EnableAction('Mode');
 
@@ -59,7 +56,6 @@ class IrrigationController extends IPSModule
         $this->RegisterVariableFloat('ComputedMoisture', 'Berechnete Feuchte', 'IRR.PercentFloat', 130);
         $this->RegisterVariableString('DecisionText', 'Automatikentscheidung', '', 140);
         $this->RegisterVariableString('LastAction', 'Letzte Aktion', '', 150);
-        $this->RegisterVariableString('ConfigOverview', 'Übersicht', '~HTMLBox', 160);
 
         $this->RegisterTimer('StopIrrigationTimer', 0, 'IRR_StopIrrigation($_IPS[\'TARGET\']);');
         $this->RegisterTimer('RefreshTimer', 60000, 'IRR_RefreshValues($_IPS[\'TARGET\']);');
@@ -81,7 +77,14 @@ class IrrigationController extends IPSModule
             return;
         }
 
-        $this->SetValue('Mode', $this->ReadPropertyInteger('Mode'));
+        $mode = $this->ReadPropertyInteger('Mode');
+        if (!in_array($mode, [self::MODE_MANUAL, self::MODE_TIME, self::MODE_AUTO], true)) {
+            IPS_SetProperty($this->InstanceID, 'Mode', self::MODE_MANUAL);
+            IPS_ApplyChanges($this->InstanceID);
+            return;
+        }
+
+        $this->SetValue('Mode', $mode);
         $this->SetValue('DurationMinutes', $this->ReadPropertyInteger('Duration'));
         $this->SetValue('MoistureThresholdValue', $this->ReadPropertyInteger('MoistureThreshold'));
         $this->SetValue('RainThresholdValue', $this->ReadPropertyInteger('RainThreshold24h'));
@@ -111,7 +114,11 @@ class IrrigationController extends IPSModule
     {
         switch ($Ident) {
             case 'Mode':
-                IPS_SetProperty($this->InstanceID, 'Mode', (int) $Value);
+                $value = (int) $Value;
+                if (!in_array($value, [self::MODE_MANUAL, self::MODE_TIME, self::MODE_AUTO], true)) {
+                    $value = self::MODE_MANUAL;
+                }
+                IPS_SetProperty($this->InstanceID, 'Mode', $value);
                 IPS_ApplyChanges($this->InstanceID);
                 break;
 
@@ -165,7 +172,6 @@ class IrrigationController extends IPSModule
             $this->SetValue('DecisionText', 'Keine gültigen Feuchtesensoren konfiguriert');
         }
 
-        $this->UpdateOverview();
         $this->UpdateStatus();
     }
 
@@ -173,8 +179,7 @@ class IrrigationController extends IPSModule
     {
         $this->RefreshValues();
 
-        $mode = $this->GetValue('Mode');
-        if ($mode !== self::MODE_AUTO) {
+        if ($this->GetValue('Mode') !== self::MODE_AUTO) {
             $this->SetValue('DecisionText', 'Automatikprüfung übersprungen: Betriebsmodus ist nicht Automatik');
             $this->WriteLog('Automatikprüfung übersprungen: falscher Modus');
             return;
@@ -240,7 +245,6 @@ class IrrigationController extends IPSModule
         $msg = 'Beregnung gestartet für ' . $durationMinutes . ' Minute(n)';
         $this->SetValue('DecisionText', $msg);
         $this->WriteLog($msg);
-        $this->UpdateOverview();
     }
 
     public function StopIrrigation()
@@ -259,14 +263,12 @@ class IrrigationController extends IPSModule
         $msg = 'Beregnung gestoppt';
         $this->SetValue('DecisionText', $msg);
         $this->WriteLog($msg);
-        $this->UpdateOverview();
     }
 
     private function RegisterProfiles()
     {
         if (!IPS_VariableProfileExists('IRR.Mode')) {
             IPS_CreateVariableProfile('IRR.Mode', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileAssociation('IRR.Mode', self::MODE_OFF, 'Aus', '', 0x808080);
             IPS_SetVariableProfileAssociation('IRR.Mode', self::MODE_MANUAL, 'Manuell', '', 0x2D8CFF);
             IPS_SetVariableProfileAssociation('IRR.Mode', self::MODE_TIME, 'Zeitsteuerung', '', 0xFFB300);
             IPS_SetVariableProfileAssociation('IRR.Mode', self::MODE_AUTO, 'Automatik', '', 0x27AE60);
@@ -306,7 +308,6 @@ class IrrigationController extends IPSModule
             IPS_SetIdent($eventID, $Ident);
             IPS_SetName($eventID, $Name);
 
-            // Leerer Wochenplan, der in IP-Symcon gepflegt werden kann
             IPS_SetHidden($eventID, false);
             IPS_SetEventActive($eventID, false);
 
@@ -436,20 +437,11 @@ class IrrigationController extends IPSModule
 
         $name = IPS_GetName($variableID);
         $formatted = @GetValueFormatted($variableID);
-        if ($formatted === false || $formatted === '') {
+        if ($formatted === false || $formatted == '') {
             $formatted = (string) @GetValue($variableID);
         }
 
         return $name . ': ' . $formatted;
-    }
-
-    private function FormatObjectName(int $objectID): string
-    {
-        if ($objectID <= 0 || !@IPS_ObjectExists($objectID)) {
-            return 'nicht konfiguriert';
-        }
-
-        return IPS_GetName($objectID) . ' (#' . $objectID . ')';
     }
 
     private function SetActuatorState(int $targetID, bool $state): void
@@ -462,7 +454,6 @@ class IrrigationController extends IPSModule
             @RequestAction($targetID, $state);
             return;
         } catch (Throwable $e) {
-            // fallback below
         }
 
         $object = IPS_GetObject($targetID);
@@ -509,59 +500,5 @@ class IrrigationController extends IPSModule
     private function FormatNumber(float $value): string
     {
         return number_format($value, 1, ',', '');
-    }
-
-    private function UpdateOverview(): void
-    {
-        $rows = [
-            ['Betriebsmodus', $this->GetModeText($this->GetValue('Mode'))],
-            ['Beregnungsdauer', $this->GetValue('DurationMinutes') . ' min'],
-            ['Feuchteschwelle', $this->GetValue('MoistureThresholdValue') . ' %'],
-            ['Regensperre', $this->GetValue('RainThresholdValue') . ' mm / 24 h'],
-            ['Beregnung aktiv', $this->GetValue('Irrigation') ? 'Ja' : 'Nein'],
-            ['Pumpe aktiv', $this->GetValue('PumpActive') ? 'Ja' : 'Nein'],
-            ['Zone 1 aktiv', $this->GetValue('Zone1Active') ? 'Ja' : 'Nein'],
-            ['Zone 2 aktiv', $this->GetValue('Zone2Active') ? 'Ja' : 'Nein'],
-            ['Berechnete Feuchte', $this->FormatNumber((float) $this->GetValue('ComputedMoisture')) . ' %'],
-            ['Automatikentscheidung', (string) $this->GetValue('DecisionText')],
-            ['Letzte Aktion', (string) $this->GetValue('LastAction')],
-            ['Sensor 1', (string) $this->GetValue('MoistureSensor1Value')],
-            ['Sensor 2', (string) $this->GetValue('MoistureSensor2Value')],
-            ['Regen letzte 24 h', (string) $this->GetValue('RainLast24hValue')],
-            ['Ventil 1', $this->FormatObjectName($this->ReadPropertyInteger('Valve1'))],
-            ['Ventil 2', $this->FormatObjectName($this->ReadPropertyInteger('Valve2'))],
-            ['Pumpe', $this->FormatObjectName($this->ReadPropertyInteger('Pump'))],
-        ];
-
-        $html = '<style>
-            table.irr {border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 13px;}
-            table.irr td {border: 1px solid #d9d9d9; padding: 6px 8px; vertical-align: top;}
-            table.irr td:first-child {background: #f5f5f5; font-weight: bold; width: 34%;}
-        </style>';
-        $html .= '<table class="irr">';
-
-        foreach ($rows as $row) {
-            $html .= '<tr><td>' . htmlspecialchars((string) $row[0]) . '</td><td>' . htmlspecialchars((string) $row[1]) . '</td></tr>';
-        }
-
-        $html .= '</table>';
-
-        $this->SetValue('ConfigOverview', $html);
-    }
-
-    private function GetModeText(int $mode): string
-    {
-        switch ($mode) {
-            case self::MODE_OFF:
-                return 'Aus';
-            case self::MODE_MANUAL:
-                return 'Manuell';
-            case self::MODE_TIME:
-                return 'Zeitsteuerung';
-            case self::MODE_AUTO:
-                return 'Automatik';
-            default:
-                return 'Unbekannt';
-        }
     }
 }
