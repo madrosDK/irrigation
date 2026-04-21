@@ -377,11 +377,11 @@ class IrrigationController extends IPSModule
             $this->ReadPropertyInteger('Valve2') <= 0 &&
             $this->ReadPropertyInteger('Pump') <= 0
         ) {
-            $this->SetStatus(202);
+            $this->SetStatus(200);
             return;
         }
 
-        $this->SetStatus(101);
+        $this->SetStatus(102);
     }
 
     private function GetEffectiveMoisture(): ?float

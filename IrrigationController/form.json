@@ -113,17 +113,17 @@
   ],
   "status": [
     {
-      "code": 101,
+      "code": 102,
       "icon": "active",
       "caption": "Instanz ist aktiv"
     },
     {
-      "code": 201,
+      "code": 104,
       "icon": "inactive",
       "caption": "Instanz ist inaktiv"
     },
     {
-      "code": 202,
+      "code": 200,
       "icon": "error",
       "caption": "Konfiguration unvollständig"
     }
