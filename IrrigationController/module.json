@@ -1,12 +1,14 @@
 {
   "id": "{A01F9B78-A377-4D89-BB13-222222222222}",
   "name": "Irrigation Controller",
-  "url": "https://github.com/madrosDK/irrigation",
   "type": 3,
-  "vendor": "",
-  "aliases": [],
-  "prefix": "IRR",
+  "vendor": "madrosDK",
+  "aliases": [
+    "Bewässerungssteuerung"
+  ],
   "parentRequirements": [],
   "childRequirements": [],
-  "implemented": []
+  "implemented": [],
+  "prefix": "IRR",
+  "url": "https://github.com/madrosDK/irrigation"
 }

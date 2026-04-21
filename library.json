@@ -1,12 +1,12 @@
 {
-  "id": "{BC5E3D20-55B3-4B6B-9E7A-111111111111}",
-  "name": "Irrigation Control Library",
+  "id": "{C4A7C4C5-8FE8-4B8B-9E7B-8FCE0A6A0E21}",
   "author": "madrosDK",
+  "name": "irrigation",
   "url": "https://github.com/madrosDK/irrigation",
   "compatibility": {
-      "version": "6.4"
+    "version": "8.0"
   },
-  "version": "1.0",
+  "version": "2.0",
   "build": 1,
-  "date": 1722345600
+  "date": 20260421
 }

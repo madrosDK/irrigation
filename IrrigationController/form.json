@@ -1,34 +1,136 @@
 {
   "elements": [
     {
-      "name": "MoistureSensor1",
-      "type": "SelectVariable",
-      "caption": "MiFlora Sensor 1 (optional)"
+      "type": "ExpansionPanel",
+      "caption": "Allgemein",
+      "items": [
+        {
+          "name": "Mode",
+          "type": "Select",
+          "caption": "Betriebsmodus",
+          "options": [
+            { "caption": "Aus", "value": 0 },
+            { "caption": "Manuell", "value": 1 },
+            { "caption": "Zeitsteuerung", "value": 2 },
+            { "caption": "Automatik", "value": 3 }
+          ]
+        },
+        {
+          "name": "Duration",
+          "type": "NumberSpinner",
+          "caption": "Beregnungsdauer (Minuten)"
+        },
+        {
+          "name": "MoistureThreshold",
+          "type": "NumberSpinner",
+          "caption": "Feuchteschwelle (%)"
+        },
+        {
+          "name": "RainThreshold24h",
+          "type": "NumberSpinner",
+          "caption": "Regensperre ab (mm / 24 h, 0 = aus)"
+        },
+        {
+          "name": "UseAverageMoisture",
+          "type": "CheckBox",
+          "caption": "Im Automatikmodus Sensoren mitteln (sonst reicht ein Unterschreiten)"
+        },
+        {
+          "name": "StartPumpFirst",
+          "type": "CheckBox",
+          "caption": "Pumpe vor den Ventilen einschalten"
+        },
+        {
+          "name": "PumpLeadTimeSeconds",
+          "type": "NumberSpinner",
+          "caption": "Vorlaufzeit Pumpe (Sekunden)"
+        }
+      ]
     },
     {
-      "name": "MoistureSensor2",
-      "type": "SelectVariable",
-      "caption": "MiFlora Sensor 2 (optional)"
+      "type": "ExpansionPanel",
+      "caption": "Sensoren",
+      "items": [
+        {
+          "name": "MoistureSensor1",
+          "type": "SelectVariable",
+          "caption": "MiFlora Sensor 1 (optional)"
+        },
+        {
+          "name": "MoistureSensor2",
+          "type": "SelectVariable",
+          "caption": "MiFlora Sensor 2 (optional)"
+        },
+        {
+          "name": "RainLast24h",
+          "type": "SelectVariable",
+          "caption": "Regenmenge letzte 24 h (optional)"
+        }
+      ]
     },
     {
-      "name": "RainLast24h",
-      "type": "SelectVariable",
-      "caption": "Regenmenge (Davis, letzte 24 h)"
+      "type": "ExpansionPanel",
+      "caption": "Aktoren",
+      "items": [
+        {
+          "name": "Valve1",
+          "type": "SelectInstance",
+          "caption": "Ventilaktor 1"
+        },
+        {
+          "name": "Valve2",
+          "type": "SelectInstance",
+          "caption": "Ventilaktor 2"
+        },
+        {
+          "name": "Pump",
+          "type": "SelectInstance",
+          "caption": "Pumpenaktor"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "type": "Button",
+      "caption": "Werte aktualisieren",
+      "onClick": "IRR_RefreshValues($id);"
     },
     {
-      "name": "Valve1",
-      "type": "SelectInstance",
-      "caption": "Ventilaktor 1 (Shelly/xComfort)"
+      "type": "Button",
+      "caption": "Automatik jetzt prüfen",
+      "onClick": "IRR_EvaluateAutomatic($id);"
     },
     {
-      "name": "Valve2",
-      "type": "SelectInstance",
-      "caption": "Ventilaktor 2 (Shelly/xComfort)"
+      "type": "Button",
+      "caption": "Beregnung starten",
+      "onClick": "IRR_StartIrrigation($id);"
     },
     {
-      "name": "Pump",
-      "type": "SelectInstance",
-      "caption": "Pumpenaktor (xComfort)"
+      "type": "Button",
+      "caption": "Beregnung stoppen",
+      "onClick": "IRR_StopIrrigation($id);"
+    },
+    {
+      "type": "Label",
+      "caption": "Im Objektbaum werden aktuelle Sensorwerte, Betriebsdaten und eine HTML-Übersicht angezeigt."
+    }
+  ],
+  "status": [
+    {
+      "code": 101,
+      "icon": "active",
+      "caption": "Instanz ist aktiv"
+    },
+    {
+      "code": 201,
+      "icon": "inactive",
+      "caption": "Instanz ist inaktiv"
+    },
+    {
+      "code": 202,
+      "icon": "error",
+      "caption": "Konfiguration unvollständig"
     }
   ]
 }
