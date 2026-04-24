@@ -1,70 +1,42 @@
-# irrigation V3.1 – Master mit Pumpe und bis zu 10 Bewässerungskreisen
+# irrigation V3.2
 
-Diese Version trennt die Bewässerung in:
+Fix-Version zur Master-/Kreis-Struktur.
 
-- **Irrigation Controller** = Master / Übermodul
-- **Irrigation Zone** = einzelner Bewässerungskreis
+## Wichtigste Änderungen
 
-## Neu in V3.1
-
-- Pumpe sitzt im Hauptmodul
-- Pumpe kann Shelly oder xComfort sein
-- jeder Kreis hat **2 Aktoren / Ventile**
-- pro Kreis wählbar:
+- Pumpe kann jetzt als Instanz oder direkt als boolesche Schaltvariable gewählt werden.
+- Direkte Schaltvariable wird bevorzugt.
+- Alte V3.1-Property `Pump` bleibt als Kompatibilität erhalten.
+- Kreise können per Button direkt unter der Master-Instanz angelegt werden.
+- Jeder Kreis kann zwei Aktoren verwenden.
+- Jeder Kreis kann Aktor-Instanz oder direkte Bool-Schaltvariable verwenden.
+- Automatik pro Kreis:
   - niedrigster Feuchtigkeitswert
-  - Durchschnitt der Feuchtesensoren
-- Kreise laufen strikt nacheinander
-- es läuft niemals mehr als ein Kreis gleichzeitig
-- Automatik überspringt Kreise ohne Bewässerungsbedarf
+  - Durchschnitt
 
-## Ablauf
+## Wenn das Hauptmodul "Keine Kreise oder keine Pumpe konfiguriert" meldet
 
-1. Master startet Sequenz
-2. Master schaltet Pumpe EIN
-3. Master wartet Pumpenvorlauf
-4. aktueller Kreis schaltet Aktor 1 und Aktor 2 EIN
-5. nach Ablauf der Kreiszeit werden beide Kreisaktoren AUS geschaltet
-6. Master wartet Pause zwischen Kreisen
-7. nächster Kreis wird gestartet
-8. am Ende wird die Pumpe AUS geschaltet
+1. In der Master-Instanz eine Pumpe auswählen:
+   - bevorzugt: `Pumpen-Schaltvariable Bool`
+   - alternativ: `Pumpenaktor Instanz`
 
-Die Pumpe bleibt während der gesamten Sequenz eingeschaltet und wird erst am Ende bzw. bei Stop ausgeschaltet.
+2. Danach im Master auf **Neuen Kreis unter dieser Instanz anlegen** klicken.
 
-## Struktur
+3. In jedem Kreis mindestens einen Aktor konfigurieren:
+   - bevorzugt: direkte Bool-Schaltvariable
+   - alternativ: Instanz
 
-```text
-irrigation/
-├── library.json
-├── README.md
-├── IrrigationController/
-│   ├── form.json
-│   ├── module.json
-│   └── module.php
-└── IrrigationZone/
-    ├── form.json
-    ├── module.json
-    └── module.php
-```
+## Warum zwei Auswahlfelder?
+
+Shelly und xComfort unterscheiden sich je nach Modul darin, ob zuverlässig über die Instanz oder über eine darunterliegende Status-/Schaltvariable geschaltet wird.
+
+Die direkte Bool-Variable ist am zuverlässigsten.
 
 ## Objektbaum
 
-Die Kreis-Instanzen müssen unter der Master-Instanz liegen:
-
 ```text
 Bewässerung Master
-├── Kreis 1 Rasen
-├── Kreis 2 Hochbeet
-├── Kreis 3 Hecke
+├── Kreis 1
+├── Kreis 2
+└── Kreis 3
 ```
-
-## Debug
-
-Beide Module verwenden `SendDebug()`.
-
-Im IP-Symcon Debugfenster siehst du:
-- Queue / Reihenfolge
-- übersprungene Kreise
-- Feuchteentscheidung
-- Pumpenschaltung
-- Aktorenschaltung
-- gefundene schaltbare Bool-Variable bei Shelly/xComfort

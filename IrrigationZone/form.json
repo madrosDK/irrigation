@@ -66,14 +66,24 @@
       "caption": "Aktoren",
       "items": [
         {
-          "name": "Valve1",
+          "name": "Valve1Instance",
           "type": "SelectInstance",
-          "caption": "Aktor 1 / Ventil 1"
+          "caption": "Aktor 1 Instanz (optional)"
         },
         {
-          "name": "Valve2",
+          "name": "Valve1Variable",
+          "type": "SelectVariable",
+          "caption": "Aktor 1 Schaltvariable Bool (optional, wird bevorzugt)"
+        },
+        {
+          "name": "Valve2Instance",
           "type": "SelectInstance",
-          "caption": "Aktor 2 / Ventil 2 optional"
+          "caption": "Aktor 2 Instanz optional"
+        },
+        {
+          "name": "Valve2Variable",
+          "type": "SelectVariable",
+          "caption": "Aktor 2 Schaltvariable Bool optional, wird bevorzugt"
         }
       ]
     }

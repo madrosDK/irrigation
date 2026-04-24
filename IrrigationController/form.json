@@ -41,14 +41,28 @@
       "caption": "Pumpe",
       "items": [
         {
-          "name": "Pump",
+          "name": "PumpInstance",
           "type": "SelectInstance",
-          "caption": "Pumpenaktor (Shelly oder xComfort)"
+          "caption": "Pumpenaktor Instanz (Shelly/xComfort, optional)"
+        },
+        {
+          "name": "PumpVariable",
+          "type": "SelectVariable",
+          "caption": "Pumpen-Schaltvariable Bool (optional, wird bevorzugt)"
+        },
+        {
+          "type": "Label",
+          "caption": "Tipp: Wenn die Instanz nicht zuverlässig schaltet, wähle direkt die boolesche Schaltvariable des Aktors aus."
         }
       ]
     }
   ],
   "actions": [
+    {
+      "type": "Button",
+      "caption": "Neuen Kreis unter dieser Instanz anlegen",
+      "onClick": "IRR_CreateZone($id);"
+    },
     {
       "type": "Button",
       "caption": "Kreise aktualisieren",
