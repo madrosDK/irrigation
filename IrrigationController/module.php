@@ -570,56 +570,171 @@ class IrrigationController extends IPSModule
             return;
         }
 
-        try {
-            @RequestAction($targetID, $state);
-            $this->Debug('SetActuatorState', 'RequestAction direkt erfolgreich');
+        $object = IPS_GetObject($targetID);
+        $this->Debug('SetActuatorState.Object', [
+            'ObjectID' => $targetID,
+            'ObjectName' => $object['ObjectName'],
+            'ObjectType' => $object['ObjectType'],
+            'ObjectIdent' => $object['ObjectIdent']
+        ]);
+
+        // RequestAction() muss auf die schaltbare Variable gehen, nicht auf die Instanz.
+        // Das ist besonders für xComfort-Aktoren wichtig.
+        if ($object['ObjectType'] === OBJECTTYPE_VARIABLE) {
+            $this->SwitchVariable($targetID, $state);
             return;
-        } catch (Throwable $e) {
-            $this->Debug('SetActuatorState.RequestActionException', $e->getMessage());
         }
 
-        $object = IPS_GetObject($targetID);
-        if ($object['ObjectType'] === OBJECTTYPE_VARIABLE) {
-            $this->Debug('SetActuatorState', 'Fallback auf Variable');
+        if ($object['ObjectType'] !== OBJECTTYPE_INSTANCE) {
+            $this->Debug('SetActuatorState', 'Ziel ist weder Variable noch Instanz');
+            return;
+        }
+
+        $switchVariableID = $this->FindSwitchVariable($targetID);
+        if ($switchVariableID <= 0) {
+            $this->Debug('SetActuatorState', 'keine schaltbare Kindvariable gefunden');
+            return;
+        }
+
+        $this->Debug('SetActuatorState.SwitchVariable', [
+            'InstanceID' => $targetID,
+            'VariableID' => $switchVariableID,
+            'VariableName' => IPS_GetName($switchVariableID)
+        ]);
+
+        $this->SwitchVariable($switchVariableID, $state);
+    }
+
+    private function FindSwitchVariable(int $instanceID): int
+    {
+        $children = IPS_GetChildrenIDs($instanceID);
+        $this->Debug('FindSwitchVariable.Children', $children);
+
+        $preferredIdents = [
+            'STATE',
+            'State',
+            'state',
+            'STATUS',
+            'Status',
+            'status',
+            'Switch',
+            'SWITCH',
+            'OnOff',
+            'Power',
+            'Value'
+        ];
+
+        $booleanCandidates = [];
+        $actionCandidates = [];
+
+        foreach ($children as $childID) {
+            if (!@IPS_VariableExists($childID)) {
+                continue;
+            }
+
+            $variable = IPS_GetVariable($childID);
+            $childObject = IPS_GetObject($childID);
+
+            $this->Debug('FindSwitchVariable.Child', [
+                'ID' => $childID,
+                'Name' => $childObject['ObjectName'],
+                'Ident' => $childObject['ObjectIdent'],
+                'Type' => $variable['VariableType'],
+                'Action' => $variable['VariableAction']
+            ]);
+
+            if ($variable['VariableType'] !== VARIABLETYPE_BOOLEAN) {
+                continue;
+            }
+
+            $booleanCandidates[] = $childID;
+
+            if ($variable['VariableAction'] > 0) {
+                $actionCandidates[] = $childID;
+            }
+        }
+
+        foreach ($preferredIdents as $ident) {
+            foreach ($actionCandidates as $candidateID) {
+                $candidateObject = IPS_GetObject($candidateID);
+                if ($candidateObject['ObjectIdent'] === $ident) {
+                    $this->Debug('FindSwitchVariable.Result', ['Reason' => 'preferred ident with action', 'ID' => $candidateID]);
+                    return $candidateID;
+                }
+            }
+        }
+
+        if (count($actionCandidates) > 0) {
+            $this->Debug('FindSwitchVariable.Result', ['Reason' => 'first boolean with action', 'ID' => $actionCandidates[0]]);
+            return $actionCandidates[0];
+        }
+
+        foreach ($preferredIdents as $ident) {
+            foreach ($booleanCandidates as $candidateID) {
+                $candidateObject = IPS_GetObject($candidateID);
+                if ($candidateObject['ObjectIdent'] === $ident) {
+                    $this->Debug('FindSwitchVariable.Result', ['Reason' => 'preferred ident without action', 'ID' => $candidateID]);
+                    return $candidateID;
+                }
+            }
+        }
+
+        if (count($booleanCandidates) > 0) {
+            $this->Debug('FindSwitchVariable.Result', ['Reason' => 'first boolean', 'ID' => $booleanCandidates[0]]);
+            return $booleanCandidates[0];
+        }
+
+        $this->Debug('FindSwitchVariable.Result', 'keine passende Variable');
+        return 0;
+    }
+
+    private function SwitchVariable(int $variableID, bool $state): void
+    {
+        if ($variableID <= 0 || !@IPS_VariableExists($variableID)) {
+            $this->Debug('SwitchVariable', 'Variable fehlt oder ist ungültig');
+            return;
+        }
+
+        $variable = IPS_GetVariable($variableID);
+        $object = IPS_GetObject($variableID);
+
+        $this->Debug('SwitchVariable', [
+            'VariableID' => $variableID,
+            'Name' => $object['ObjectName'],
+            'Ident' => $object['ObjectIdent'],
+            'Type' => $variable['VariableType'],
+            'Action' => $variable['VariableAction'],
+            'State' => $state
+        ]);
+
+        if ($variable['VariableType'] !== VARIABLETYPE_BOOLEAN) {
+            $this->Debug('SwitchVariable', 'Variable ist nicht boolesch');
+            return;
+        }
+
+        // Wenn eine Aktion hinterlegt ist, wird damit der echte Aktor geschaltet.
+        if ($variable['VariableAction'] > 0) {
             try {
-                @RequestAction($targetID, $state);
-                $this->Debug('SetActuatorState', 'RequestAction auf Variable erfolgreich');
+                RequestAction($variableID, $state);
+                $this->Debug('SwitchVariable', 'RequestAction erfolgreich');
                 return;
             } catch (Throwable $e) {
-                $this->Debug('SetActuatorState.VariableRequestActionException', $e->getMessage());
-                @SetValue($targetID, $state);
-                $this->Debug('SetActuatorState', 'SetValue auf Variable ausgeführt');
+                $this->Debug('SwitchVariable.RequestActionException', $e->getMessage());
+            }
+        } else {
+            $this->Debug('SwitchVariable', 'keine VariableAction vorhanden, RequestAction wird trotzdem versucht');
+            try {
+                RequestAction($variableID, $state);
+                $this->Debug('SwitchVariable', 'RequestAction ohne VariableAction erfolgreich');
                 return;
+            } catch (Throwable $e) {
+                $this->Debug('SwitchVariable.RequestActionNoActionException', $e->getMessage());
             }
         }
 
-        if ($object['ObjectType'] === OBJECTTYPE_INSTANCE) {
-            $this->Debug('SetActuatorState', 'Fallback auf Instanz-Kindvariablen');
-            $children = IPS_GetChildrenIDs($targetID);
-            foreach ($children as $childID) {
-                if (!@IPS_VariableExists($childID)) {
-                    continue;
-                }
-
-                $var = IPS_GetVariable($childID);
-                if ($var['VariableType'] !== VARIABLETYPE_BOOLEAN) {
-                    continue;
-                }
-
-                try {
-                    @RequestAction($childID, $state);
-                    $this->Debug('SetActuatorState', ['ChildID' => $childID, 'Method' => 'RequestAction']);
-                    return;
-                } catch (Throwable $e) {
-                    $this->Debug('SetActuatorState.ChildRequestActionException', $e->getMessage());
-                    @SetValue($childID, $state);
-                    $this->Debug('SetActuatorState', ['ChildID' => $childID, 'Method' => 'SetValue']);
-                    return;
-                }
-            }
-        }
-
-        $this->Debug('SetActuatorState', 'kein passendes Ziel zum Schalten gefunden');
+        // Fallback nur für Dummy-/Statusvariablen. Das schaltet keinen echten Aktor.
+        @SetValue($variableID, $state);
+        $this->Debug('SwitchVariable', 'Fallback SetValue ausgeführt - Achtung: schaltet keinen echten Aktor, falls keine Aktion hinterlegt ist');
     }
 
     private function WriteLog(string $message): void
