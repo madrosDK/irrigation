@@ -607,25 +607,12 @@ class IrrigationController extends IPSModule
 
     private function FindSwitchVariable(int $instanceID): int
     {
-        $children = IPS_GetChildrenIDs($instanceID);
-        $this->Debug('FindSwitchVariable.Children', $children);
+        $children = $this->GetChildVariablesRecursive($instanceID, 3);
+        $this->Debug('FindSwitchVariable.ChildrenRecursive', $children);
 
-        $preferredIdents = [
-            'STATE',
-            'State',
-            'state',
-            'STATUS',
-            'Status',
-            'status',
-            'Switch',
-            'SWITCH',
-            'OnOff',
-            'Power',
-            'Value'
-        ];
-
-        $booleanCandidates = [];
-        $actionCandidates = [];
+        $bestID = 0;
+        $bestScore = -9999;
+        $bestReason = '';
 
         foreach ($children as $childID) {
             if (!@IPS_VariableExists($childID)) {
@@ -640,52 +627,129 @@ class IrrigationController extends IPSModule
                 'Name' => $childObject['ObjectName'],
                 'Ident' => $childObject['ObjectIdent'],
                 'Type' => $variable['VariableType'],
-                'Action' => $variable['VariableAction']
+                'Action' => $variable['VariableAction'],
+                'Profile' => $variable['VariableProfile'],
+                'CustomProfile' => $variable['VariableCustomProfile']
             ]);
 
             if ($variable['VariableType'] !== VARIABLETYPE_BOOLEAN) {
                 continue;
             }
 
-            $booleanCandidates[] = $childID;
+            $haystack = strtolower($childObject['ObjectName'] . ' ' . $childObject['ObjectIdent'] . ' ' . $variable['VariableProfile'] . ' ' . $variable['VariableCustomProfile']);
+            $score = 0;
+            $reasons = [];
 
             if ($variable['VariableAction'] > 0) {
-                $actionCandidates[] = $childID;
+                $score += 100;
+                $reasons[] = 'has action';
             }
-        }
 
-        foreach ($preferredIdents as $ident) {
-            foreach ($actionCandidates as $candidateID) {
-                $candidateObject = IPS_GetObject($candidateID);
-                if ($candidateObject['ObjectIdent'] === $ident) {
-                    $this->Debug('FindSwitchVariable.Result', ['Reason' => 'preferred ident with action', 'ID' => $candidateID]);
-                    return $candidateID;
+            $positiveTerms = [
+                'state' => 50,
+                'status' => 45,
+                'switch' => 45,
+                'schalter' => 45,
+                'relay' => 45,
+                'relais' => 45,
+                'output' => 45,
+                'ausgang' => 45,
+                'power' => 35,
+                'onoff' => 35,
+                'on/off' => 35,
+                'ein/aus' => 35,
+                'active' => 20,
+                'aktiv' => 20
+            ];
+
+            foreach ($positiveTerms as $term => $points) {
+                if (strpos($haystack, $term) !== false) {
+                    $score += $points;
+                    $reasons[] = '+' . $term;
                 }
             }
-        }
 
-        if (count($actionCandidates) > 0) {
-            $this->Debug('FindSwitchVariable.Result', ['Reason' => 'first boolean with action', 'ID' => $actionCandidates[0]]);
-            return $actionCandidates[0];
-        }
+            $negativeTerms = [
+                'online' => 120,
+                'connected' => 120,
+                'reachable' => 120,
+                'available' => 100,
+                'update' => 100,
+                'firmware' => 100,
+                'cloud' => 80,
+                'overtemperature' => 80,
+                'overpower' => 80,
+                'error' => 70,
+                'fehler' => 70,
+                'alarm' => 70,
+                'battery' => 70,
+                'batterie' => 70,
+                'motion' => 50,
+                'bewegung' => 50,
+                'input' => 40,
+                'eingang' => 40
+            ];
 
-        foreach ($preferredIdents as $ident) {
-            foreach ($booleanCandidates as $candidateID) {
-                $candidateObject = IPS_GetObject($candidateID);
-                if ($candidateObject['ObjectIdent'] === $ident) {
-                    $this->Debug('FindSwitchVariable.Result', ['Reason' => 'preferred ident without action', 'ID' => $candidateID]);
-                    return $candidateID;
+            foreach ($negativeTerms as $term => $points) {
+                if (strpos($haystack, $term) !== false) {
+                    $score -= $points;
+                    $reasons[] = '-' . $term;
                 }
+            }
+
+            $ident = $childObject['ObjectIdent'];
+            if (in_array($ident, ['STATE', 'State', 'state', 'STATUS', 'Status', 'status', 'Switch', 'SWITCH', 'Relay', 'RELAY', 'Output', 'OUTPUT', 'Power', 'POWER', 'OnOff'], true)) {
+                $score += 80;
+                $reasons[] = 'exact preferred ident';
+            }
+
+            $this->Debug('FindSwitchVariable.Score', [
+                'ID' => $childID,
+                'Score' => $score,
+                'Reasons' => $reasons
+            ]);
+
+            if ($score > $bestScore) {
+                $bestScore = $score;
+                $bestID = $childID;
+                $bestReason = implode(', ', $reasons);
             }
         }
 
-        if (count($booleanCandidates) > 0) {
-            $this->Debug('FindSwitchVariable.Result', ['Reason' => 'first boolean', 'ID' => $booleanCandidates[0]]);
-            return $booleanCandidates[0];
+        if ($bestID > 0 && $bestScore > 0) {
+            $this->Debug('FindSwitchVariable.Result', [
+                'ID' => $bestID,
+                'Score' => $bestScore,
+                'Reason' => $bestReason
+            ]);
+            return $bestID;
         }
 
-        $this->Debug('FindSwitchVariable.Result', 'keine passende Variable');
+        $this->Debug('FindSwitchVariable.Result', 'keine passende schaltbare Bool-Variable gefunden');
         return 0;
+    }
+
+    private function GetChildVariablesRecursive(int $parentID, int $maxDepth, int $currentDepth = 0): array
+    {
+        if ($currentDepth >= $maxDepth) {
+            return [];
+        }
+
+        $result = [];
+        $children = IPS_GetChildrenIDs($parentID);
+
+        foreach ($children as $childID) {
+            if (@IPS_VariableExists($childID)) {
+                $result[] = $childID;
+                continue;
+            }
+
+            if (@IPS_ObjectExists($childID)) {
+                $result = array_merge($result, $this->GetChildVariablesRecursive($childID, $maxDepth, $currentDepth + 1));
+            }
+        }
+
+        return $result;
     }
 
     private function SwitchVariable(int $variableID, bool $state): void
