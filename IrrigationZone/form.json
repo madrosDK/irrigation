@@ -1,31 +1,120 @@
 {
   "elements": [
-    {"type":"ExpansionPanel","caption":"Kreis","items":[
-      {"name":"Enabled","type":"CheckBox","caption":"Kreis aktiv"},
-      {"name":"ZoneNumber","type":"NumberSpinner","caption":"Reihenfolge / Kreisnummer (1-10)"},
-      {"name":"Duration","type":"NumberSpinner","caption":"Beregnungsdauer (Minuten, 0 = Master-Standard)"},
-      {"name":"MoistureThreshold","type":"NumberSpinner","caption":"Feuchteschwelle (%)"},
-      {"name":"UseAverageMoisture","type":"CheckBox","caption":"Sensoren mitteln, sonst niedrigster Wert entscheidet"}
-    ]},
-    {"type":"ExpansionPanel","caption":"Sensoren","items":[
-      {"name":"MoistureSensor1","type":"SelectVariable","caption":"Feuchtesensor 1"},
-      {"name":"MoistureSensor2","type":"SelectVariable","caption":"Feuchtesensor 2 optional"},
-      {"name":"RainLast24h","type":"SelectVariable","caption":"Regen letzte 24 h optional"},
-      {"name":"RainThreshold24h","type":"NumberSpinner","caption":"Regensperre ab mm / 24 h (0 = aus)"}
-    ]},
-    {"type":"ExpansionPanel","caption":"Aktor","items":[
-      {"name":"Valve","type":"SelectInstance","caption":"Ventilaktor Shelly oder xComfort"}
-    ]}
+    {
+      "type": "ExpansionPanel",
+      "caption": "Kreis",
+      "items": [
+        {
+          "name": "Enabled",
+          "type": "CheckBox",
+          "caption": "Kreis aktiv"
+        },
+        {
+          "name": "ZoneNumber",
+          "type": "NumberSpinner",
+          "caption": "Reihenfolge / Kreisnummer (1-10)"
+        },
+        {
+          "name": "Duration",
+          "type": "NumberSpinner",
+          "caption": "Beregnungsdauer (Minuten, 0 = Master-Standard)"
+        },
+        {
+          "name": "MoistureThreshold",
+          "type": "NumberSpinner",
+          "caption": "Feuchteschwelle (%)"
+        },
+        {
+          "name": "MoistureMode",
+          "type": "Select",
+          "caption": "Feuchteauswertung",
+          "options": [
+            { "caption": "Niedrigster Feuchtigkeitswert", "value": 0 },
+            { "caption": "Durchschnitt der Sensoren", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "ExpansionPanel",
+      "caption": "Sensoren",
+      "items": [
+        {
+          "name": "MoistureSensor1",
+          "type": "SelectVariable",
+          "caption": "Feuchtesensor 1"
+        },
+        {
+          "name": "MoistureSensor2",
+          "type": "SelectVariable",
+          "caption": "Feuchtesensor 2 optional"
+        },
+        {
+          "name": "RainLast24h",
+          "type": "SelectVariable",
+          "caption": "Regen letzte 24 h optional"
+        },
+        {
+          "name": "RainThreshold24h",
+          "type": "NumberSpinner",
+          "caption": "Regensperre ab mm / 24 h (0 = aus)"
+        }
+      ]
+    },
+    {
+      "type": "ExpansionPanel",
+      "caption": "Aktoren",
+      "items": [
+        {
+          "name": "Valve1",
+          "type": "SelectInstance",
+          "caption": "Aktor 1 / Ventil 1"
+        },
+        {
+          "name": "Valve2",
+          "type": "SelectInstance",
+          "caption": "Aktor 2 / Ventil 2 optional"
+        }
+      ]
+    }
   ],
   "actions": [
-    {"type":"Button","caption":"Werte aktualisieren","onClick":"IRRZ_RefreshValues($id);"},
-    {"type":"Button","caption":"Automatikentscheidung prüfen","onClick":"IRRZ_Evaluate($id);"},
-    {"type":"Button","caption":"Kreis manuell starten","onClick":"IRRZ_StartZone($id);"},
-    {"type":"Button","caption":"Kreis stoppen","onClick":"IRRZ_StopZone($id);"}
+    {
+      "type": "Button",
+      "caption": "Werte aktualisieren",
+      "onClick": "IRRZ_RefreshValues($id);"
+    },
+    {
+      "type": "Button",
+      "caption": "Automatikentscheidung prüfen",
+      "onClick": "IRRZ_Evaluate($id);"
+    },
+    {
+      "type": "Button",
+      "caption": "Kreis manuell starten",
+      "onClick": "IRRZ_StartZone($id);"
+    },
+    {
+      "type": "Button",
+      "caption": "Kreis stoppen",
+      "onClick": "IRRZ_StopZone($id);"
+    }
   ],
   "status": [
-    {"code":102,"icon":"active","caption":"Kreis ist aktiv"},
-    {"code":104,"icon":"inactive","caption":"Kreis ist deaktiviert"},
-    {"code":200,"icon":"error","caption":"Kreis unvollständig konfiguriert"}
+    {
+      "code": 102,
+      "icon": "active",
+      "caption": "Kreis ist aktiv"
+    },
+    {
+      "code": 104,
+      "icon": "inactive",
+      "caption": "Kreis ist deaktiviert"
+    },
+    {
+      "code": 200,
+      "icon": "error",
+      "caption": "Kreis unvollständig konfiguriert"
+    }
   ]
 }

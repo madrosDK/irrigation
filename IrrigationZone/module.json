@@ -3,7 +3,9 @@
   "name": "Irrigation Zone",
   "type": 3,
   "vendor": "madrosDK",
-  "aliases": ["Bewässerungskreis"],
+  "aliases": [
+    "Bewässerungskreis"
+  ],
   "parentRequirements": [],
   "childRequirements": [],
   "implemented": [],

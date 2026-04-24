@@ -3,7 +3,9 @@
   "name": "Irrigation Controller",
   "type": 3,
   "vendor": "madrosDK",
-  "aliases": ["Bewässerungssteuerung Master"],
+  "aliases": [
+    "Bewässerungssteuerung Master"
+  ],
   "parentRequirements": [],
   "childRequirements": [],
   "implemented": [],

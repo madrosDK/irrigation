@@ -7,6 +7,7 @@ class IrrigationController extends IPSModule
     private const MODE_MANUAL = 1;
     private const MODE_TIME = 2;
     private const MODE_AUTO = 3;
+
     private const MODULE_ID_ZONE = '{B69A3F87-2E64-4AA0-B67E-7D84587B8A11}';
 
     public function Create()
@@ -15,36 +16,49 @@ class IrrigationController extends IPSModule
 
         $this->RegisterPropertyInteger('Mode', self::MODE_MANUAL);
         $this->RegisterPropertyInteger('DefaultDuration', 10);
+        $this->RegisterPropertyInteger('PumpLeadTimeSeconds', 5);
         $this->RegisterPropertyInteger('PauseBetweenZonesSeconds', 5);
         $this->RegisterPropertyInteger('MaxZones', 10);
+        $this->RegisterPropertyInteger('Pump', 0);
 
         $this->RegisterProfiles();
 
         $this->RegisterVariableInteger('Mode', 'Betriebsmodus', 'IRR.Mode', 10);
         $this->EnableAction('Mode');
+
         $this->RegisterVariableInteger('DefaultDuration', 'Standarddauer je Kreis', 'IRR.Minutes', 20);
         $this->EnableAction('DefaultDuration');
-        $this->RegisterVariableInteger('PauseBetweenZonesSeconds', 'Pause zwischen Kreisen', 'IRR.Seconds', 30);
-        $this->EnableAction('PauseBetweenZonesSeconds');
-        $this->RegisterVariableBoolean('SequenceActive', 'Sequenz aktiv', '~Switch', 40);
-        $this->EnableAction('SequenceActive');
-        $this->RegisterVariableInteger('CurrentZone', 'Aktueller Kreis', '', 50);
-        $this->RegisterVariableInteger('QueueCount', 'Wartende Kreise', '', 60);
-        $this->RegisterVariableString('DecisionText', 'Sequenzstatus', '', 70);
-        $this->RegisterVariableString('LastAction', 'Letzte Aktion', '', 80);
-        $this->RegisterVariableString('ZoneOverview', 'Kreisübersicht', '', 90);
 
+        $this->RegisterVariableInteger('PumpLeadTimeSeconds', 'Pumpenvorlauf', 'IRR.Seconds', 30);
+        $this->EnableAction('PumpLeadTimeSeconds');
+
+        $this->RegisterVariableInteger('PauseBetweenZonesSeconds', 'Pause zwischen Kreisen', 'IRR.Seconds', 40);
+        $this->EnableAction('PauseBetweenZonesSeconds');
+
+        $this->RegisterVariableBoolean('SequenceActive', 'Sequenz aktiv', '~Switch', 50);
+        $this->EnableAction('SequenceActive');
+
+        $this->RegisterVariableBoolean('PumpActive', 'Pumpe aktiv', '~Switch', 60);
+        $this->RegisterVariableInteger('CurrentZone', 'Aktueller Kreis', '', 70);
+        $this->RegisterVariableInteger('QueueCount', 'Wartende Kreise', '', 80);
+        $this->RegisterVariableString('DecisionText', 'Sequenzstatus', '', 90);
+        $this->RegisterVariableString('LastAction', 'Letzte Aktion', '', 100);
+        $this->RegisterVariableString('ZoneOverview', 'Kreisübersicht', '', 110);
+
+        $this->RegisterTimer('StartCurrentZoneAfterPumpTimer', 0, 'IRR_StartCurrentZoneAfterPumpLead($_IPS[\'TARGET\']);');
         $this->RegisterTimer('StopCurrentZoneTimer', 0, 'IRR_FinishCurrentZone($_IPS[\'TARGET\']);');
         $this->RegisterTimer('StartNextZoneTimer', 0, 'IRR_StartNextZone($_IPS[\'TARGET\']);');
 
         $this->SetBuffer('Queue', json_encode([]));
         $this->SetBuffer('CurrentZoneID', '0');
+
         $this->Debug('Create', 'Master initialisiert');
     }
 
     public function ApplyChanges()
     {
         parent::ApplyChanges();
+
         $this->Debug('ApplyChanges', 'gestartet');
 
         if (IPS_GetKernelRunlevel() !== KR_READY) {
@@ -68,14 +82,23 @@ class IrrigationController extends IPSModule
 
         $this->SetValue('Mode', $mode);
         $this->SetValue('DefaultDuration', $this->ReadPropertyInteger('DefaultDuration'));
+        $this->SetValue('PumpLeadTimeSeconds', $this->ReadPropertyInteger('PumpLeadTimeSeconds'));
         $this->SetValue('PauseBetweenZonesSeconds', $this->ReadPropertyInteger('PauseBetweenZonesSeconds'));
 
         $this->MaintainWeekplan('ScheduleTimer', 'Zeitsteuerung');
         $this->MaintainWeekplan('ScheduleAuto', 'Automatik');
         $this->UpdateWeekplanVisibility();
+
         $this->RefreshZones();
         $this->UpdateStatus();
-        $this->Debug('ApplyChanges', 'abgeschlossen');
+
+        $this->Debug('ApplyChanges', [
+            'Mode' => $mode,
+            'DefaultDuration' => $this->ReadPropertyInteger('DefaultDuration'),
+            'PumpLeadTimeSeconds' => $this->ReadPropertyInteger('PumpLeadTimeSeconds'),
+            'PauseBetweenZonesSeconds' => $this->ReadPropertyInteger('PauseBetweenZonesSeconds'),
+            'Pump' => $this->ReadPropertyInteger('Pump')
+        ]);
     }
 
     public function GetConfigurationForm()
@@ -96,21 +119,34 @@ class IrrigationController extends IPSModule
                 IPS_SetProperty($this->InstanceID, 'Mode', $value);
                 IPS_ApplyChanges($this->InstanceID);
                 break;
+
             case 'DefaultDuration':
                 IPS_SetProperty($this->InstanceID, 'DefaultDuration', max(1, (int) $Value));
                 IPS_ApplyChanges($this->InstanceID);
                 break;
+
+            case 'PumpLeadTimeSeconds':
+                IPS_SetProperty($this->InstanceID, 'PumpLeadTimeSeconds', max(0, (int) $Value));
+                IPS_ApplyChanges($this->InstanceID);
+                break;
+
             case 'PauseBetweenZonesSeconds':
                 IPS_SetProperty($this->InstanceID, 'PauseBetweenZonesSeconds', max(0, (int) $Value));
                 IPS_ApplyChanges($this->InstanceID);
                 break;
+
             case 'SequenceActive':
                 if ((bool) $Value) {
-                    $this->GetValue('Mode') === self::MODE_AUTO ? $this->StartAutomaticSequence() : $this->StartManualSequence();
+                    if ($this->GetValue('Mode') === self::MODE_AUTO) {
+                        $this->StartAutomaticSequence();
+                    } else {
+                        $this->StartManualSequence();
+                    }
                 } else {
                     $this->StopSequence();
                 }
                 break;
+
             default:
                 throw new Exception('Unbekannte Aktion: ' . $Ident);
         }
@@ -120,9 +156,11 @@ class IrrigationController extends IPSModule
     {
         $zones = $this->GetZones();
         $parts = [];
+
         foreach ($zones as $zoneID) {
-            $parts[] = 'Kreis ' . @IRRZ_GetZoneNumber($zoneID) . ': ' . IPS_GetName($zoneID) . ' (#' . $zoneID . ')';
+            $parts[] = '#' . $zoneID . ' | Kreis ' . @IRRZ_GetZoneNumber($zoneID) . ' | ' . @IPS_GetName($zoneID);
         }
+
         $this->SetValue('ZoneOverview', implode("\n", $parts));
         $this->SetValue('QueueCount', count($this->GetQueue()));
         $this->Debug('RefreshZones', ['Zones' => $zones]);
@@ -131,40 +169,56 @@ class IrrigationController extends IPSModule
     public function StartManualSequence(): void
     {
         $this->Debug('StartManualSequence', 'gestartet');
-        $this->StartQueue($this->GetRunnableZones(false), 'Manuell/Zeitsteuerung');
+        $zones = $this->GetRunnableZones(false);
+        $this->StartQueue($zones, 'Zeitsteuerung / Manuell');
     }
 
     public function StartAutomaticSequence(): void
     {
         $this->Debug('StartAutomaticSequence', 'gestartet');
-        $this->StartQueue($this->GetRunnableZones(true), 'Automatik');
+        $zones = $this->GetRunnableZones(true);
+        $this->StartQueue($zones, 'Automatik');
     }
 
     public function StopSequence(): void
     {
         $this->Debug('StopSequence', 'gestartet');
+
+        $this->SetTimerInterval('StartCurrentZoneAfterPumpTimer', 0);
+        $this->SetTimerInterval('StopCurrentZoneTimer', 0);
+        $this->SetTimerInterval('StartNextZoneTimer', 0);
+
         $currentZoneID = (int) $this->GetBuffer('CurrentZoneID');
         if ($currentZoneID > 0 && @IPS_InstanceExists($currentZoneID)) {
             @IRRZ_StopZone($currentZoneID);
         }
-        $this->SetQueue([]);
+
+        $this->SetPumpState(false);
+
+        $this->SetBuffer('Queue', json_encode([]));
         $this->SetBuffer('CurrentZoneID', '0');
-        $this->SetTimerInterval('StopCurrentZoneTimer', 0);
-        $this->SetTimerInterval('StartNextZoneTimer', 0);
+
         $this->SetValue('SequenceActive', false);
+        $this->SetValue('PumpActive', false);
         $this->SetValue('CurrentZone', 0);
+        $this->SetValue('QueueCount', 0);
+
         $this->WriteLog('Sequenz gestoppt');
     }
 
     public function StartNextZone(): void
     {
         $this->Debug('StartNextZone', 'gestartet');
+
         $this->SetTimerInterval('StartNextZoneTimer', 0);
 
         $queue = $this->GetQueue();
         if (count($queue) === 0) {
+            $this->Debug('StartNextZone', 'Queue leer');
             $this->SetBuffer('CurrentZoneID', '0');
+            $this->SetPumpState(false);
             $this->SetValue('SequenceActive', false);
+            $this->SetValue('PumpActive', false);
             $this->SetValue('CurrentZone', 0);
             $this->SetValue('QueueCount', 0);
             $this->WriteLog('Sequenz abgeschlossen');
@@ -173,6 +227,7 @@ class IrrigationController extends IPSModule
 
         $zoneID = array_shift($queue);
         $this->SetQueue($queue);
+        $this->SetBuffer('CurrentZoneID', (string) $zoneID);
 
         if (!@IPS_InstanceExists($zoneID)) {
             $this->Debug('StartNextZone', 'Zone existiert nicht mehr, springe weiter');
@@ -185,82 +240,149 @@ class IrrigationController extends IPSModule
             $duration = $this->ReadPropertyInteger('DefaultDuration');
         }
 
-        $this->SetBuffer('CurrentZoneID', (string) $zoneID);
         $this->SetValue('CurrentZone', @IRRZ_GetZoneNumber($zoneID));
+        $this->SetValue('QueueCount', count($queue));
+
+        $this->WriteLog('Bereite Kreis ' . @IRRZ_GetZoneNumber($zoneID) . ' vor: Pumpe EIN, danach Vorlauf');
+        $this->SetPumpState(true);
+
+        $leadMs = max(0, $this->ReadPropertyInteger('PumpLeadTimeSeconds')) * 1000;
+        $this->SetTimerInterval('StartCurrentZoneAfterPumpTimer', max(100, $leadMs));
+    }
+
+    public function StartCurrentZoneAfterPumpLead(): void
+    {
+        $this->Debug('StartCurrentZoneAfterPumpLead', 'gestartet');
+        $this->SetTimerInterval('StartCurrentZoneAfterPumpTimer', 0);
+
+        $zoneID = (int) $this->GetBuffer('CurrentZoneID');
+        if ($zoneID <= 0 || !@IPS_InstanceExists($zoneID)) {
+            $this->Debug('StartCurrentZoneAfterPumpLead', 'keine gültige aktuelle Zone');
+            $this->SetTimerInterval('StartNextZoneTimer', 100);
+            return;
+        }
+
+        $duration = @IRRZ_GetDurationMinutes($zoneID);
+        if (!is_int($duration) || $duration <= 0) {
+            $duration = $this->ReadPropertyInteger('DefaultDuration');
+        }
+
         $this->WriteLog('Starte Kreis ' . @IRRZ_GetZoneNumber($zoneID) . ' für ' . $duration . ' Minute(n)');
         @IRRZ_StartZone($zoneID);
+
         $this->SetTimerInterval('StopCurrentZoneTimer', $duration * 60 * 1000);
     }
 
     public function FinishCurrentZone(): void
     {
         $this->Debug('FinishCurrentZone', 'gestartet');
+
         $this->SetTimerInterval('StopCurrentZoneTimer', 0);
+
         $currentZoneID = (int) $this->GetBuffer('CurrentZoneID');
         if ($currentZoneID > 0 && @IPS_InstanceExists($currentZoneID)) {
             @IRRZ_StopZone($currentZoneID);
             $this->WriteLog('Kreis ' . @IRRZ_GetZoneNumber($currentZoneID) . ' beendet');
         }
+
+        // Pumpe bleibt grundsätzlich an, solange weitere Kreise folgen.
+        // Dadurch wird sie nur beim Sequenzende oder Stop ausgeschaltet.
         $this->SetBuffer('CurrentZoneID', '0');
+
         $pauseSeconds = max(0, $this->ReadPropertyInteger('PauseBetweenZonesSeconds'));
+        $this->Debug('FinishCurrentZone.PauseSeconds', $pauseSeconds);
         $this->SetTimerInterval('StartNextZoneTimer', max(100, $pauseSeconds * 1000));
     }
 
     private function StartQueue(array $zones, string $source): void
     {
         $this->Debug('StartQueue', ['Source' => $source, 'Zones' => $zones]);
+
         if ($this->GetValue('SequenceActive')) {
+            $this->Debug('StartQueue', 'Sequenz läuft bereits, stoppe zuerst');
             $this->StopSequence();
         }
+
         if (count($zones) === 0) {
-            $this->SetQueue([]);
+            $this->SetBuffer('Queue', json_encode([]));
+            $this->SetValue('QueueCount', 0);
             $this->SetValue('SequenceActive', false);
+            $this->SetPumpState(false);
             $this->WriteLog($source . ': keine Kreise zum Bewässern');
             return;
         }
+
         $this->SetQueue($zones);
+        $this->SetValue('QueueCount', count($zones));
         $this->SetValue('SequenceActive', true);
         $this->WriteLog($source . ': Sequenz mit ' . count($zones) . ' Kreis(en) gestartet');
+
         $this->SetTimerInterval('StartNextZoneTimer', 100);
     }
 
     private function GetRunnableZones(bool $automatic): array
     {
         $result = [];
-        foreach ($this->GetZones() as $zoneID) {
+        $zones = $this->GetZones();
+
+        foreach ($zones as $zoneID) {
             $enabled = @IRRZ_IsEnabled($zoneID);
             $number = @IRRZ_GetZoneNumber($zoneID);
-            $this->Debug('GetRunnableZones.Zone', ['ID' => $zoneID, 'Number' => $number, 'Enabled' => $enabled, 'Automatic' => $automatic]);
+
+            $this->Debug('GetRunnableZones.Zone', [
+                'ID' => $zoneID,
+                'Number' => $number,
+                'Enabled' => $enabled,
+                'Automatic' => $automatic
+            ]);
+
             if (!$enabled) {
                 continue;
             }
-            if ($automatic && !@IRRZ_ShouldWater($zoneID)) {
-                $this->Debug('GetRunnableZones.Skip', 'Kreis ' . $number . ' braucht keine Bewässerung');
-                continue;
+
+            if ($automatic) {
+                $shouldWater = @IRRZ_ShouldWater($zoneID);
+                $this->Debug('GetRunnableZones.ShouldWater', [
+                    'ID' => $zoneID,
+                    'Number' => $number,
+                    'ShouldWater' => $shouldWater
+                ]);
+
+                if (!$shouldWater) {
+                    continue;
+                }
             }
+
             $result[] = $zoneID;
         }
+
         return $result;
     }
 
     private function GetZones(): array
     {
         $maxZones = max(1, min(10, $this->ReadPropertyInteger('MaxZones')));
+        $children = IPS_GetChildrenIDs($this->InstanceID);
         $zones = [];
-        foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
+
+        foreach ($children as $childID) {
             if (!@IPS_InstanceExists($childID)) {
                 continue;
             }
+
             $instance = IPS_GetInstance($childID);
             if (strtoupper($instance['ModuleInfo']['ModuleID']) !== strtoupper(self::MODULE_ID_ZONE)) {
                 continue;
             }
+
             $number = @IRRZ_GetZoneNumber($childID);
             if (!is_int($number) || $number < 1 || $number > $maxZones) {
                 continue;
             }
+
             $zones[$number . '_' . $childID] = $childID;
         }
+
         ksort($zones, SORT_NATURAL);
         return array_values($zones);
     }
@@ -268,7 +390,11 @@ class IrrigationController extends IPSModule
     private function GetQueue(): array
     {
         $queue = json_decode($this->GetBuffer('Queue'), true);
-        return is_array($queue) ? array_values(array_filter($queue, 'is_int')) : [];
+        if (!is_array($queue)) {
+            return [];
+        }
+
+        return array_values(array_filter($queue, 'is_int'));
     }
 
     private function SetQueue(array $queue): void
@@ -279,19 +405,123 @@ class IrrigationController extends IPSModule
         $this->Debug('SetQueue', $queue);
     }
 
+    private function SetPumpState(bool $state): void
+    {
+        $pumpID = $this->ReadPropertyInteger('Pump');
+        $this->Debug('SetPumpState', ['PumpID' => $pumpID, 'State' => $state]);
+
+        $this->SetActuatorState($pumpID, $state);
+        $this->SetValue('PumpActive', $state && $pumpID > 0);
+    }
+
+    private function SetActuatorState(int $targetID, bool $state): void
+    {
+        $this->Debug('SetActuatorState', ['TargetID' => $targetID, 'State' => $state]);
+
+        if ($targetID <= 0 || !@IPS_ObjectExists($targetID)) {
+            $this->Debug('SetActuatorState', 'Zielobjekt fehlt oder ist 0');
+            return;
+        }
+
+        $switchVariableID = $this->FindSwitchVariable($targetID);
+        if ($switchVariableID <= 0) {
+            $this->Debug('SetActuatorState', 'keine schaltbare Bool-Variable gefunden');
+            return;
+        }
+
+        try {
+            RequestAction($switchVariableID, $state);
+            $this->Debug('SetActuatorState', ['SwitchVariableID' => $switchVariableID, 'Method' => 'RequestAction']);
+            return;
+        } catch (Throwable $e) {
+            $this->Debug('SetActuatorState.RequestActionException', $e->getMessage());
+        }
+
+        @SetValue($switchVariableID, $state);
+        $this->Debug('SetActuatorState', ['SwitchVariableID' => $switchVariableID, 'Method' => 'SetValue-Fallback']);
+    }
+
+    private function FindSwitchVariable(int $targetID): int
+    {
+        if (@IPS_VariableExists($targetID)) {
+            $var = IPS_GetVariable($targetID);
+            if ($var['VariableType'] === VARIABLETYPE_BOOLEAN) {
+                return $targetID;
+            }
+        }
+
+        if (!@IPS_InstanceExists($targetID)) {
+            return 0;
+        }
+
+        $candidates = [];
+        foreach (IPS_GetChildrenIDs($targetID) as $childID) {
+            if (!@IPS_VariableExists($childID)) {
+                continue;
+            }
+
+            $var = IPS_GetVariable($childID);
+            if ($var['VariableType'] !== VARIABLETYPE_BOOLEAN) {
+                continue;
+            }
+
+            $name = strtolower(IPS_GetName($childID));
+            $ident = strtolower(IPS_GetObject($childID)['ObjectIdent']);
+
+            $bad = ['online', 'connected', 'reachable', 'update', 'firmware', 'battery', 'lowbat', 'error', 'overtemperature'];
+            foreach ($bad as $word) {
+                if (str_contains($name, $word) || str_contains($ident, $word)) {
+                    continue 2;
+                }
+            }
+
+            $score = 0;
+            $good = ['state', 'status', 'switch', 'relay', 'output', 'power', 'valve', 'pump'];
+            foreach ($good as $word) {
+                if (str_contains($name, $word) || str_contains($ident, $word)) {
+                    $score += 10;
+                }
+            }
+
+            if ($var['VariableAction'] > 0) {
+                $score += 100;
+            }
+
+            $candidates[$childID] = $score;
+        }
+
+        if (count($candidates) === 0) {
+            return 0;
+        }
+
+        arsort($candidates);
+        $selected = (int) array_key_first($candidates);
+        $this->Debug('FindSwitchVariable.Selected', [
+            'VariableID' => $selected,
+            'Name' => IPS_GetName($selected),
+            'Score' => $candidates[$selected]
+        ]);
+
+        return $selected;
+    }
+
     private function MaintainWeekplan(string $Ident, string $Name): void
     {
         $eventID = @IPS_GetObjectIDByIdent($Ident, $this->InstanceID);
         if ($eventID === false) {
+            $this->Debug('MaintainWeekplan', 'erstelle ' . $Name);
             $eventID = IPS_CreateEvent(2);
             IPS_SetParent($eventID, $this->InstanceID);
             IPS_SetIdent($eventID, $Ident);
             IPS_SetName($eventID, $Name);
+
             IPS_SetEventScheduleAction($eventID, 0, 'Aus', 0x808080, false);
             IPS_SetEventScheduleAction($eventID, 1, 'Ein', 0x27AE60, true);
+
             for ($day = 0; $day <= 6; $day++) {
                 @IPS_SetEventScheduleGroup($eventID, $day, 1 << $day);
             }
+
             IPS_SetEventActive($eventID, false);
         }
     }
@@ -299,12 +529,15 @@ class IrrigationController extends IPSModule
     private function UpdateWeekplanVisibility(): void
     {
         $mode = $this->ReadPropertyInteger('Mode');
+
         $timerEventID = @IPS_GetObjectIDByIdent('ScheduleTimer', $this->InstanceID);
         $autoEventID = @IPS_GetObjectIDByIdent('ScheduleAuto', $this->InstanceID);
+
         if ($timerEventID !== false) {
             IPS_SetHidden($timerEventID, $mode !== self::MODE_TIME);
             IPS_SetEventActive($timerEventID, $mode === self::MODE_TIME);
         }
+
         if ($autoEventID !== false) {
             IPS_SetHidden($autoEventID, $mode !== self::MODE_AUTO);
             IPS_SetEventActive($autoEventID, $mode === self::MODE_AUTO);
@@ -313,7 +546,13 @@ class IrrigationController extends IPSModule
 
     private function UpdateStatus(): void
     {
-        $this->SetStatus(count($this->GetZones()) === 0 ? 200 : 102);
+        $zones = $this->GetZones();
+        if (count($zones) === 0 || $this->ReadPropertyInteger('Pump') <= 0) {
+            $this->SetStatus(200);
+            return;
+        }
+
+        $this->SetStatus(102);
     }
 
     private function RegisterProfiles(): void
@@ -324,11 +563,13 @@ class IrrigationController extends IPSModule
             IPS_SetVariableProfileAssociation('IRR.Mode', self::MODE_TIME, 'Zeitsteuerung', '', 0xFFB300);
             IPS_SetVariableProfileAssociation('IRR.Mode', self::MODE_AUTO, 'Automatik', '', 0x27AE60);
         }
+
         if (!IPS_VariableProfileExists('IRR.Minutes')) {
             IPS_CreateVariableProfile('IRR.Minutes', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileValues('IRR.Minutes', 0, 720, 1);
             IPS_SetVariableProfileText('IRR.Minutes', '', ' min');
         }
+
         if (!IPS_VariableProfileExists('IRR.Seconds')) {
             IPS_CreateVariableProfile('IRR.Seconds', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileValues('IRR.Seconds', 0, 3600, 1);
@@ -351,15 +592,18 @@ class IrrigationController extends IPSModule
             $this->SendDebug('IRR', $Message, 0);
             return;
         }
+
         if (is_array($Data) || is_object($Data)) {
             $json = json_encode($Data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             $this->SendDebug($Message, $json === false ? 'json_encode failed' : $json, 0);
             return;
         }
+
         if (is_bool($Data)) {
             $this->SendDebug($Message, $Data ? 'true' : 'false', 0);
             return;
         }
+
         $this->SendDebug($Message, (string) $Data, 0);
     }
 }

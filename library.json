@@ -3,8 +3,10 @@
   "author": "madrosDK",
   "name": "irrigation",
   "url": "https://github.com/madrosDK/irrigation",
-  "compatibility": { "version": "8.0" },
-  "version": "3.0",
-  "build": 1,
+  "compatibility": {
+    "version": "8.0"
+  },
+  "version": "3.1",
+  "build": 2,
   "date": 20260424
 }

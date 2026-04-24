@@ -1,21 +1,36 @@
-# irrigation V3 – Master mit Bewässerungskreisen
+# irrigation V3.1 – Master mit Pumpe und bis zu 10 Bewässerungskreisen
 
-Diese Version trennt die Bewässerung in ein Übermodul und einzelne Kreise.
+Diese Version trennt die Bewässerung in:
 
-## Module
+- **Irrigation Controller** = Master / Übermodul
+- **Irrigation Zone** = einzelner Bewässerungskreis
 
-- `IrrigationController` = Master / Übermodul
-- `IrrigationZone` = einzelner Bewässerungskreis
+## Neu in V3.1
+
+- Pumpe sitzt im Hauptmodul
+- Pumpe kann Shelly oder xComfort sein
+- jeder Kreis hat **2 Aktoren / Ventile**
+- pro Kreis wählbar:
+  - niedrigster Feuchtigkeitswert
+  - Durchschnitt der Feuchtesensoren
+- Kreise laufen strikt nacheinander
+- es läuft niemals mehr als ein Kreis gleichzeitig
+- Automatik überspringt Kreise ohne Bewässerungsbedarf
 
 ## Ablauf
 
-Der Master verwaltet Betriebsmodus, Standarddauer, Pause zwischen den Kreisen und die Sequenz.
+1. Master startet Sequenz
+2. Master schaltet Pumpe EIN
+3. Master wartet Pumpenvorlauf
+4. aktueller Kreis schaltet Aktor 1 und Aktor 2 EIN
+5. nach Ablauf der Kreiszeit werden beide Kreisaktoren AUS geschaltet
+6. Master wartet Pause zwischen Kreisen
+7. nächster Kreis wird gestartet
+8. am Ende wird die Pumpe AUS geschaltet
 
-Jeder Kreis hat eigene Sensoren, Feuchteschwelle, Regensperre und einen eigenen Ventilaktor.
+Die Pumpe bleibt während der gesamten Sequenz eingeschaltet und wird erst am Ende bzw. bei Stop ausgeschaltet.
 
-Im Automatikmodus wird jeder Kreis einzeln geprüft. Muss ein Kreis nicht bewässert werden, wird er übersprungen. Danach kommt der nächste Kreis. Es läuft niemals mehr als ein Kreis gleichzeitig.
-
-## Ordnerstruktur
+## Struktur
 
 ```text
 irrigation/
@@ -31,24 +46,25 @@ irrigation/
     └── module.php
 ```
 
-## Einrichtung
+## Objektbaum
 
-1. Master-Instanz `Irrigation Controller` anlegen.
-2. Darunter bis zu 10 Instanzen `Irrigation Zone` anlegen.
-3. In jeder Zone die Kreisnummer 1 bis 10 setzen.
-4. Sensoren und Ventilaktor pro Zone auswählen.
-5. Im Master die Sequenz starten oder später Wochenpläne verwenden.
+Die Kreis-Instanzen müssen unter der Master-Instanz liegen:
+
+```text
+Bewässerung Master
+├── Kreis 1 Rasen
+├── Kreis 2 Hochbeet
+├── Kreis 3 Hecke
+```
 
 ## Debug
 
-Beide Module nutzen `SendDebug()`.
+Beide Module verwenden `SendDebug()`.
+
 Im IP-Symcon Debugfenster siehst du:
-
-- welche Kreise erkannt werden
-- welche Kreise übersprungen werden
-- warum ein Kreis bewässern soll oder nicht
-- welcher Aktor bzw. welche Bool-Variable geschaltet wird
-
-## Hinweis
-
-Die Wochenpläne werden angelegt und passend zum Betriebsmodus sichtbar geschaltet. Die eigentliche direkte Wochenplan-Auslösung kann in der nächsten Version noch ergänzt werden, sobald der Grundaufbau bei dir sauber läuft.
+- Queue / Reihenfolge
+- übersprungene Kreise
+- Feuchteentscheidung
+- Pumpenschaltung
+- Aktorenschaltung
+- gefundene schaltbare Bool-Variable bei Shelly/xComfort
