@@ -61,12 +61,10 @@ class IrrigationController extends IPSModule
         $this->RegisterTimer('RefreshTimer', 60000, 'IRR_RefreshValues($_IPS[\'TARGET\']);');
 
         $this->SetBuffer('RegisteredMessages', json_encode([]));
-        $this->Debug('Create', 'Modul initialisiert');
     }
 
     public function Destroy()
     {
-        $this->Debug('Destroy', 'Modul wird zerstört');
         $this->UnregisterSourceMessages();
         parent::Destroy();
     }
@@ -75,33 +73,12 @@ class IrrigationController extends IPSModule
     {
         parent::ApplyChanges();
 
-        $this->Debug('ApplyChanges', 'gestartet');
-        $this->Debug('KernelRunlevel', IPS_GetKernelRunlevel());
-
         if (IPS_GetKernelRunlevel() !== KR_READY) {
-            $this->Debug('ApplyChanges', 'abgebrochen: Kernel nicht ready');
             return;
         }
 
         $mode = $this->ReadPropertyInteger('Mode');
-        $this->Debug('Properties', [
-            'Mode' => $mode,
-            'Duration' => $this->ReadPropertyInteger('Duration'),
-            'MoistureThreshold' => $this->ReadPropertyInteger('MoistureThreshold'),
-            'RainThreshold24h' => $this->ReadPropertyInteger('RainThreshold24h'),
-            'UseAverageMoisture' => $this->ReadPropertyBoolean('UseAverageMoisture'),
-            'StartPumpFirst' => $this->ReadPropertyBoolean('StartPumpFirst'),
-            'PumpLeadTimeSeconds' => $this->ReadPropertyInteger('PumpLeadTimeSeconds'),
-            'MoistureSensor1' => $this->ReadPropertyInteger('MoistureSensor1'),
-            'MoistureSensor2' => $this->ReadPropertyInteger('MoistureSensor2'),
-            'RainLast24h' => $this->ReadPropertyInteger('RainLast24h'),
-            'Valve1' => $this->ReadPropertyInteger('Valve1'),
-            'Valve2' => $this->ReadPropertyInteger('Valve2'),
-            'Pump' => $this->ReadPropertyInteger('Pump')
-        ]);
-
         if (!in_array($mode, [self::MODE_MANUAL, self::MODE_TIME, self::MODE_AUTO], true)) {
-            $this->Debug('ApplyChanges', 'ungültiger Mode, setze auf MANUAL');
             IPS_SetProperty($this->InstanceID, 'Mode', self::MODE_MANUAL);
             IPS_ApplyChanges($this->InstanceID);
             return;
@@ -126,7 +103,6 @@ class IrrigationController extends IPSModule
         $this->RegisterSourceMessages();
         $this->RefreshValues();
         $this->UpdateStatus();
-        $this->Debug('ApplyChanges', 'abgeschlossen');
     }
 
     public function GetConfigurationForm()
@@ -136,8 +112,6 @@ class IrrigationController extends IPSModule
 
     public function RequestAction($Ident, $Value)
     {
-        $this->Debug('RequestAction', ['Ident' => $Ident, 'Value' => $Value]);
-
         switch ($Ident) {
             case 'Mode':
                 $value = (int) $Value;
@@ -180,50 +154,30 @@ class IrrigationController extends IPSModule
     {
         parent::MessageSink($TimeStamp, $SenderID, $Message, $Data);
 
-        $this->Debug('MessageSink', [
-            'TimeStamp' => $TimeStamp,
-            'SenderID' => $SenderID,
-            'Message' => $Message,
-            'Data' => $Data
-        ]);
-
         if ($Message === VM_UPDATE) {
-            $this->Debug('MessageSink', 'VM_UPDATE erkannt -> RefreshValues');
             $this->RefreshValues();
         }
     }
 
     public function RefreshValues()
     {
-        $this->Debug('RefreshValues', 'gestartet');
-
         $this->SetValue('MoistureSensor1Value', $this->FormatSelectedVariableValue('MoistureSensor1'));
         $this->SetValue('MoistureSensor2Value', $this->FormatSelectedVariableValue('MoistureSensor2'));
         $this->SetValue('RainLast24hValue', $this->FormatSelectedVariableValue('RainLast24h'));
 
-        $this->Debug('RefreshValues.Sensor1', $this->GetValue('MoistureSensor1Value'));
-        $this->Debug('RefreshValues.Sensor2', $this->GetValue('MoistureSensor2Value'));
-        $this->Debug('RefreshValues.Rain24h', $this->GetValue('RainLast24hValue'));
-
         $moisture = $this->GetEffectiveMoisture();
-        $this->Debug('RefreshValues.ComputedMoisture', $moisture);
         $this->SetValue('ComputedMoisture', $moisture ?? 0.0);
 
         if ($moisture === null) {
-            $this->Debug('RefreshValues', 'keine gültigen Feuchtesensoren');
             $this->SetValue('DecisionText', 'Keine gültigen Feuchtesensoren konfiguriert');
         }
 
         $this->UpdateStatus();
-        $this->Debug('RefreshValues', 'abgeschlossen');
     }
 
     public function EvaluateAutomatic()
     {
-        $this->Debug('EvaluateAutomatic', 'gestartet');
         $this->RefreshValues();
-
-        $this->Debug('EvaluateAutomatic.Mode', $this->GetValue('Mode'));
 
         if ($this->GetValue('Mode') !== self::MODE_AUTO) {
             $this->SetValue('DecisionText', 'Automatikprüfung übersprungen: Betriebsmodus ist nicht Automatik');
@@ -233,9 +187,6 @@ class IrrigationController extends IPSModule
 
         $rainValue = $this->ReadNumericPropertyVariable('RainLast24h');
         $rainThreshold = $this->ReadPropertyInteger('RainThreshold24h');
-        $this->Debug('EvaluateAutomatic.RainValue', $rainValue);
-        $this->Debug('EvaluateAutomatic.RainThreshold', $rainThreshold);
-
         if ($rainThreshold > 0 && $rainValue !== null && $rainValue >= $rainThreshold) {
             $msg = 'Automatik blockiert: Regensperre aktiv (' . $this->FormatNumber($rainValue) . ' mm / 24 h)';
             $this->SetValue('DecisionText', $msg);
@@ -244,8 +195,6 @@ class IrrigationController extends IPSModule
         }
 
         $effectiveMoisture = $this->GetEffectiveMoisture();
-        $this->Debug('EvaluateAutomatic.EffectiveMoisture', $effectiveMoisture);
-
         if ($effectiveMoisture === null) {
             $msg = 'Automatik nicht möglich: Kein gültiger Feuchtewert vorhanden';
             $this->SetValue('DecisionText', $msg);
@@ -254,8 +203,6 @@ class IrrigationController extends IPSModule
         }
 
         $threshold = $this->ReadPropertyInteger('MoistureThreshold');
-        $this->Debug('EvaluateAutomatic.MoistureThreshold', $threshold);
-
         if ($effectiveMoisture < $threshold) {
             $msg = 'Automatik startet Beregnung: Feuchte ' . $this->FormatNumber($effectiveMoisture) . ' % < ' . $threshold . ' %';
             $this->SetValue('DecisionText', $msg);
@@ -271,12 +218,7 @@ class IrrigationController extends IPSModule
 
     public function StartIrrigation()
     {
-        $this->Debug('StartIrrigation', 'gestartet');
-
         $durationMinutes = max(1, $this->ReadPropertyInteger('Duration'));
-        $this->Debug('StartIrrigation.DurationMinutes', $durationMinutes);
-        $this->Debug('StartIrrigation.StartPumpFirst', $this->ReadPropertyBoolean('StartPumpFirst'));
-        $this->Debug('StartIrrigation.PumpLeadTimeSeconds', $this->ReadPropertyInteger('PumpLeadTimeSeconds'));
 
         if ($this->ReadPropertyBoolean('StartPumpFirst')) {
             $this->SetActuatorState($this->ReadPropertyInteger('Pump'), true);
@@ -285,9 +227,6 @@ class IrrigationController extends IPSModule
 
         $zone1 = $this->ReadPropertyInteger('Valve1');
         $zone2 = $this->ReadPropertyInteger('Valve2');
-        $this->Debug('StartIrrigation.Zone1', $zone1);
-        $this->Debug('StartIrrigation.Zone2', $zone2);
-        $this->Debug('StartIrrigation.Pump', $this->ReadPropertyInteger('Pump'));
 
         $this->SetActuatorState($zone1, true);
         $this->SetActuatorState($zone2, true);
@@ -302,23 +241,15 @@ class IrrigationController extends IPSModule
         $this->SetValue('Zone2Active', $zone2 > 0);
 
         $this->SetTimerInterval('StopIrrigationTimer', $durationMinutes * 60 * 1000);
-        $this->Debug('StartIrrigation.StopTimerMs', $durationMinutes * 60 * 1000);
 
         $msg = 'Beregnung gestartet für ' . $durationMinutes . ' Minute(n)';
         $this->SetValue('DecisionText', $msg);
         $this->WriteLog($msg);
-        $this->Debug('StartIrrigation', 'abgeschlossen');
     }
 
     public function StopIrrigation()
     {
-        $this->Debug('StopIrrigation', 'gestartet');
         $this->SetTimerInterval('StopIrrigationTimer', 0);
-        $this->Debug('StopIrrigation.Timer', 0);
-
-        $this->Debug('StopIrrigation.Valve1', $this->ReadPropertyInteger('Valve1'));
-        $this->Debug('StopIrrigation.Valve2', $this->ReadPropertyInteger('Valve2'));
-        $this->Debug('StopIrrigation.Pump', $this->ReadPropertyInteger('Pump'));
 
         $this->SetActuatorState($this->ReadPropertyInteger('Valve1'), false);
         $this->SetActuatorState($this->ReadPropertyInteger('Valve2'), false);
@@ -332,7 +263,6 @@ class IrrigationController extends IPSModule
         $msg = 'Beregnung gestoppt';
         $this->SetValue('DecisionText', $msg);
         $this->WriteLog($msg);
-        $this->Debug('StopIrrigation', 'abgeschlossen');
     }
 
     private function RegisterProfiles()
@@ -371,11 +301,8 @@ class IrrigationController extends IPSModule
 
     private function MaintainWeekplan(string $Ident, string $Name)
     {
-        $this->Debug('MaintainWeekplan', ['Ident' => $Ident, 'Name' => $Name]);
-
         $eventID = @IPS_GetObjectIDByIdent($Ident, $this->InstanceID);
         if ($eventID === false) {
-            $this->Debug('MaintainWeekplan', 'Wochenplan existiert noch nicht, wird erstellt');
             $eventID = IPS_CreateEvent(2);
             IPS_SetParent($eventID, $this->InstanceID);
             IPS_SetIdent($eventID, $Ident);
@@ -396,7 +323,6 @@ class IrrigationController extends IPSModule
     private function UpdateWeekplanVisibility()
     {
         $mode = $this->ReadPropertyInteger('Mode');
-        $this->Debug('UpdateWeekplanVisibility.Mode', $mode);
 
         $timerEventID = @IPS_GetObjectIDByIdent('ScheduleTimer', $this->InstanceID);
         $autoEventID = @IPS_GetObjectIDByIdent('ScheduleAuto', $this->InstanceID);
@@ -414,30 +340,23 @@ class IrrigationController extends IPSModule
 
     private function RegisterSourceMessages()
     {
-        $this->Debug('RegisterSourceMessages', 'gestartet');
         $this->UnregisterSourceMessages();
 
         $ids = [];
         foreach (['MoistureSensor1', 'MoistureSensor2', 'RainLast24h'] as $property) {
             $id = $this->ReadPropertyInteger($property);
             if ($id > 0 && @IPS_VariableExists($id)) {
-                $this->Debug('RegisterSourceMessages.Register', ['Property' => $property, 'ID' => $id]);
                 $this->RegisterMessage($id, VM_UPDATE);
                 $ids[] = $id;
-            } else {
-                $this->Debug('RegisterSourceMessages.Skip', ['Property' => $property, 'ID' => $id]);
             }
         }
 
         $this->SetBuffer('RegisteredMessages', json_encode($ids));
-        $this->Debug('RegisterSourceMessages.Done', $ids);
     }
 
     private function UnregisterSourceMessages()
     {
         $ids = json_decode($this->GetBuffer('RegisteredMessages'), true);
-        $this->Debug('UnregisterSourceMessages', $ids);
-
         if (!is_array($ids)) {
             return;
         }
@@ -453,36 +372,23 @@ class IrrigationController extends IPSModule
 
     private function UpdateStatus()
     {
-        $this->Debug('UpdateStatus.Input', [
-            'Valve1' => $this->ReadPropertyInteger('Valve1'),
-            'Valve2' => $this->ReadPropertyInteger('Valve2'),
-            'Pump' => $this->ReadPropertyInteger('Pump')
-        ]);
-
         if (
             $this->ReadPropertyInteger('Valve1') <= 0 &&
             $this->ReadPropertyInteger('Valve2') <= 0 &&
             $this->ReadPropertyInteger('Pump') <= 0
         ) {
-            $this->Debug('UpdateStatus', 'SetStatus 200');
             $this->SetStatus(200);
             return;
         }
 
-        $this->Debug('UpdateStatus', 'SetStatus 102');
         $this->SetStatus(102);
     }
 
     private function GetEffectiveMoisture(): ?float
     {
-        $this->Debug('GetEffectiveMoisture', 'gestartet');
-
         $values = [];
         $sensor1 = $this->ReadNumericPropertyVariable('MoistureSensor1');
         $sensor2 = $this->ReadNumericPropertyVariable('MoistureSensor2');
-
-        $this->Debug('GetEffectiveMoisture.Sensor1', $sensor1);
-        $this->Debug('GetEffectiveMoisture.Sensor2', $sensor2);
 
         if ($sensor1 !== null) {
             $values[] = $sensor1;
@@ -493,45 +399,29 @@ class IrrigationController extends IPSModule
         }
 
         if (count($values) === 0) {
-            $this->Debug('GetEffectiveMoisture.Result', 'null');
             return null;
         }
 
         if (count($values) === 1) {
-            $this->Debug('GetEffectiveMoisture.Result', $values[0]);
             return $values[0];
         }
 
         if ($this->ReadPropertyBoolean('UseAverageMoisture')) {
-            $result = array_sum($values) / count($values);
-            $this->Debug('GetEffectiveMoisture.UseAverage', true);
-            $this->Debug('GetEffectiveMoisture.Result', $result);
-            return $result;
+            return array_sum($values) / count($values);
         }
 
-        $result = min($values);
-        $this->Debug('GetEffectiveMoisture.UseAverage', false);
-        $this->Debug('GetEffectiveMoisture.Result', $result);
-        return $result;
+        return min($values);
     }
 
     private function ReadNumericPropertyVariable(string $propertyName): ?float
     {
-        $this->Debug('ReadNumericPropertyVariable.Property', $propertyName);
-
         $variableID = $this->ReadPropertyInteger($propertyName);
-        $this->Debug('ReadNumericPropertyVariable.ID', $variableID);
-
         if ($variableID <= 0 || !@IPS_VariableExists($variableID)) {
-            $this->Debug('ReadNumericPropertyVariable', 'Variable fehlt oder ist ungültig');
             return null;
         }
 
         $value = @GetValue($variableID);
-        $this->Debug('ReadNumericPropertyVariable.Value', $value);
-
         if (!is_numeric($value)) {
-            $this->Debug('ReadNumericPropertyVariable', 'Wert ist nicht numerisch');
             return null;
         }
 
@@ -540,13 +430,8 @@ class IrrigationController extends IPSModule
 
     private function FormatSelectedVariableValue(string $propertyName): string
     {
-        $this->Debug('FormatSelectedVariableValue.Property', $propertyName);
-
         $variableID = $this->ReadPropertyInteger($propertyName);
-        $this->Debug('FormatSelectedVariableValue.ID', $variableID);
-
         if ($variableID <= 0 || !@IPS_VariableExists($variableID)) {
-            $this->Debug('FormatSelectedVariableValue', 'nicht konfiguriert');
             return 'nicht konfiguriert';
         }
 
@@ -556,45 +441,33 @@ class IrrigationController extends IPSModule
             $formatted = (string) @GetValue($variableID);
         }
 
-        $result = $name . ': ' . $formatted;
-        $this->Debug('FormatSelectedVariableValue.Result', $result);
-        return $result;
+        return $name . ': ' . $formatted;
     }
 
     private function SetActuatorState(int $targetID, bool $state): void
     {
-        $this->Debug('SetActuatorState', ['TargetID' => $targetID, 'State' => $state]);
-
         if ($targetID <= 0 || !@IPS_ObjectExists($targetID)) {
-            $this->Debug('SetActuatorState', 'Zielobjekt fehlt oder ist 0');
             return;
         }
 
         try {
             @RequestAction($targetID, $state);
-            $this->Debug('SetActuatorState', 'RequestAction direkt erfolgreich');
             return;
         } catch (Throwable $e) {
-            $this->Debug('SetActuatorState.RequestActionException', $e->getMessage());
         }
 
         $object = IPS_GetObject($targetID);
         if ($object['ObjectType'] === OBJECTTYPE_VARIABLE) {
-            $this->Debug('SetActuatorState', 'Fallback auf Variable');
             try {
                 @RequestAction($targetID, $state);
-                $this->Debug('SetActuatorState', 'RequestAction auf Variable erfolgreich');
                 return;
             } catch (Throwable $e) {
-                $this->Debug('SetActuatorState.VariableRequestActionException', $e->getMessage());
                 @SetValue($targetID, $state);
-                $this->Debug('SetActuatorState', 'SetValue auf Variable ausgeführt');
                 return;
             }
         }
 
         if ($object['ObjectType'] === OBJECTTYPE_INSTANCE) {
-            $this->Debug('SetActuatorState', 'Fallback auf Instanz-Kindvariablen');
             $children = IPS_GetChildrenIDs($targetID);
             foreach ($children as $childID) {
                 if (!@IPS_VariableExists($childID)) {
@@ -608,18 +481,13 @@ class IrrigationController extends IPSModule
 
                 try {
                     @RequestAction($childID, $state);
-                    $this->Debug('SetActuatorState', ['ChildID' => $childID, 'Method' => 'RequestAction']);
                     return;
                 } catch (Throwable $e) {
-                    $this->Debug('SetActuatorState.ChildRequestActionException', $e->getMessage());
                     @SetValue($childID, $state);
-                    $this->Debug('SetActuatorState', ['ChildID' => $childID, 'Method' => 'SetValue']);
                     return;
                 }
             }
         }
-
-        $this->Debug('SetActuatorState', 'kein passendes Ziel zum Schalten gefunden');
     }
 
     private function WriteLog(string $message): void
@@ -634,27 +502,5 @@ class IrrigationController extends IPSModule
         return number_format($value, 1, ',', '');
     }
 
-    private function Debug(string $Message, $Data = null): void
-    {
-        if ($Data === null) {
-            $this->SendDebug('IRR', $Message, 0);
-            return;
-        }
-
-        if (is_array($Data) || is_object($Data)) {
-            $json = json_encode($Data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            if ($json === false) {
-                $json = 'json_encode failed';
-            }
-            $this->SendDebug($Message, $json, 0);
-            return;
-        }
-
-        if (is_bool($Data)) {
-            $this->SendDebug($Message, $Data ? 'true' : 'false', 0);
-            return;
-        }
-
-        $this->SendDebug($Message, (string) $Data, 0);
-    }
+    
 }
