@@ -1,17 +1,19 @@
-# irrigation
+# irrigation V3 – Master mit Bewässerungskreisen
 
-IP-Symcon Modul zur Bewässerungssteuerung mit MiFlora-Sensoren, Regenwerten und Aktoren für Ventile / Pumpe.
+Diese Version trennt die Bewässerung in ein Übermodul und einzelne Kreise.
 
-## Stand der V2.1
+## Module
 
-Diese Version ist gegenüber der vorherigen Fassung bewusst schlanker:
+- `IrrigationController` = Master / Übermodul
+- `IrrigationZone` = einzelner Bewässerungskreis
 
-- **keine HTML-Übersicht**
-- **kein Modus `Aus`**
-- Betriebsmodi nur noch:
-  - Manuell
-  - Zeitsteuerung
-  - Automatik
+## Ablauf
+
+Der Master verwaltet Betriebsmodus, Standarddauer, Pause zwischen den Kreisen und die Sequenz.
+
+Jeder Kreis hat eigene Sensoren, Feuchteschwelle, Regensperre und einen eigenen Ventilaktor.
+
+Im Automatikmodus wird jeder Kreis einzeln geprüft. Muss ein Kreis nicht bewässert werden, wird er übersprungen. Danach kommt der nächste Kreis. Es läuft niemals mehr als ein Kreis gleichzeitig.
 
 ## Ordnerstruktur
 
@@ -19,43 +21,34 @@ Diese Version ist gegenüber der vorherigen Fassung bewusst schlanker:
 irrigation/
 ├── library.json
 ├── README.md
-└── IrrigationController/
+├── IrrigationController/
+│   ├── form.json
+│   ├── module.json
+│   └── module.php
+└── IrrigationZone/
     ├── form.json
     ├── module.json
     └── module.php
 ```
 
-## Sichtbare Variablen im Frontend
-- Betriebsmodus
-- Beregnungsdauer
-- Feuchteschwelle
-- Regensperre
-- Beregnung aktiv
-- Pumpe aktiv
-- Zone 1 aktiv
-- Zone 2 aktiv
-- Sensor 1 Wert
-- Sensor 2 Wert
-- Regen letzte 24 h
-- Berechnete Feuchte
-- Automatikentscheidung
-- Letzte Aktion
+## Einrichtung
 
-## Funktionen
-- Manuelle Beregnung start / stop
-- Automatikprüfung über Feuchte
-- Regensperre über 24h-Regenwert
-- Pumpenvorlauf vor Ventilen
-- zwei Wochenpläne:
-  - Zeitsteuerung
-  - Automatik
+1. Master-Instanz `Irrigation Controller` anlegen.
+2. Darunter bis zu 10 Instanzen `Irrigation Zone` anlegen.
+3. In jeder Zone die Kreisnummer 1 bis 10 setzen.
+4. Sensoren und Ventilaktor pro Zone auswählen.
+5. Im Master die Sequenz starten oder später Wochenpläne verwenden.
 
-## Installation
-1. Dateien in dein GitHub-Repo bzw. Symcon-Modulverzeichnis kopieren
-2. Bibliothek neu laden
-3. Modul installieren
-4. Instanz anlegen
-5. Sensoren und Aktoren auswählen
+## Debug
+
+Beide Module nutzen `SendDebug()`.
+Im IP-Symcon Debugfenster siehst du:
+
+- welche Kreise erkannt werden
+- welche Kreise übersprungen werden
+- warum ein Kreis bewässern soll oder nicht
+- welcher Aktor bzw. welche Bool-Variable geschaltet wird
 
 ## Hinweis
-Alte Dateien wie `module_alpha.php` oder `module - Kopie.php` sollten entfernt werden.
+
+Die Wochenpläne werden angelegt und passend zum Betriebsmodus sichtbar geschaltet. Die eigentliche direkte Wochenplan-Auslösung kann in der nächsten Version noch ergänzt werden, sobald der Grundaufbau bei dir sauber läuft.

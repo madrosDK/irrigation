@@ -61,10 +61,12 @@ class IrrigationController extends IPSModule
         $this->RegisterTimer('RefreshTimer', 60000, 'IRR_RefreshValues($_IPS[\'TARGET\']);');
 
         $this->SetBuffer('RegisteredMessages', json_encode([]));
+        $this->Debug('Create', 'Modul initialisiert');
     }
 
     public function Destroy()
     {
+        $this->Debug('Destroy', 'Modul wird zerstört');
         $this->UnregisterSourceMessages();
         parent::Destroy();
     }
@@ -73,12 +75,33 @@ class IrrigationController extends IPSModule
     {
         parent::ApplyChanges();
 
+        $this->Debug('ApplyChanges', 'gestartet');
+        $this->Debug('KernelRunlevel', IPS_GetKernelRunlevel());
+
         if (IPS_GetKernelRunlevel() !== KR_READY) {
+            $this->Debug('ApplyChanges', 'abgebrochen: Kernel nicht ready');
             return;
         }
 
         $mode = $this->ReadPropertyInteger('Mode');
+        $this->Debug('Properties', [
+            'Mode' => $mode,
+            'Duration' => $this->ReadPropertyInteger('Duration'),
+            'MoistureThreshold' => $this->ReadPropertyInteger('MoistureThreshold'),
+            'RainThreshold24h' => $this->ReadPropertyInteger('RainThreshold24h'),
+            'UseAverageMoisture' => $this->ReadPropertyBoolean('UseAverageMoisture'),
+            'StartPumpFirst' => $this->ReadPropertyBoolean('StartPumpFirst'),
+            'PumpLeadTimeSeconds' => $this->ReadPropertyInteger('PumpLeadTimeSeconds'),
+            'MoistureSensor1' => $this->ReadPropertyInteger('MoistureSensor1'),
+            'MoistureSensor2' => $this->ReadPropertyInteger('MoistureSensor2'),
+            'RainLast24h' => $this->ReadPropertyInteger('RainLast24h'),
+            'Valve1' => $this->ReadPropertyInteger('Valve1'),
+            'Valve2' => $this->ReadPropertyInteger('Valve2'),
+            'Pump' => $this->ReadPropertyInteger('Pump')
+        ]);
+
         if (!in_array($mode, [self::MODE_MANUAL, self::MODE_TIME, self::MODE_AUTO], true)) {
+            $this->Debug('ApplyChanges', 'ungültiger Mode, setze auf MANUAL');
             IPS_SetProperty($this->InstanceID, 'Mode', self::MODE_MANUAL);
             IPS_ApplyChanges($this->InstanceID);
             return;
@@ -103,6 +126,7 @@ class IrrigationController extends IPSModule
         $this->RegisterSourceMessages();
         $this->RefreshValues();
         $this->UpdateStatus();
+        $this->Debug('ApplyChanges', 'abgeschlossen');
     }
 
     public function GetConfigurationForm()
@@ -112,6 +136,8 @@ class IrrigationController extends IPSModule
 
     public function RequestAction($Ident, $Value)
     {
+        $this->Debug('RequestAction', ['Ident' => $Ident, 'Value' => $Value]);
+
         switch ($Ident) {
             case 'Mode':
                 $value = (int) $Value;
@@ -154,30 +180,50 @@ class IrrigationController extends IPSModule
     {
         parent::MessageSink($TimeStamp, $SenderID, $Message, $Data);
 
+        $this->Debug('MessageSink', [
+            'TimeStamp' => $TimeStamp,
+            'SenderID' => $SenderID,
+            'Message' => $Message,
+            'Data' => $Data
+        ]);
+
         if ($Message === VM_UPDATE) {
+            $this->Debug('MessageSink', 'VM_UPDATE erkannt -> RefreshValues');
             $this->RefreshValues();
         }
     }
 
     public function RefreshValues()
     {
+        $this->Debug('RefreshValues', 'gestartet');
+
         $this->SetValue('MoistureSensor1Value', $this->FormatSelectedVariableValue('MoistureSensor1'));
         $this->SetValue('MoistureSensor2Value', $this->FormatSelectedVariableValue('MoistureSensor2'));
         $this->SetValue('RainLast24hValue', $this->FormatSelectedVariableValue('RainLast24h'));
 
+        $this->Debug('RefreshValues.Sensor1', $this->GetValue('MoistureSensor1Value'));
+        $this->Debug('RefreshValues.Sensor2', $this->GetValue('MoistureSensor2Value'));
+        $this->Debug('RefreshValues.Rain24h', $this->GetValue('RainLast24hValue'));
+
         $moisture = $this->GetEffectiveMoisture();
+        $this->Debug('RefreshValues.ComputedMoisture', $moisture);
         $this->SetValue('ComputedMoisture', $moisture ?? 0.0);
 
         if ($moisture === null) {
+            $this->Debug('RefreshValues', 'keine gültigen Feuchtesensoren');
             $this->SetValue('DecisionText', 'Keine gültigen Feuchtesensoren konfiguriert');
         }
 
         $this->UpdateStatus();
+        $this->Debug('RefreshValues', 'abgeschlossen');
     }
 
     public function EvaluateAutomatic()
     {
+        $this->Debug('EvaluateAutomatic', 'gestartet');
         $this->RefreshValues();
+
+        $this->Debug('EvaluateAutomatic.Mode', $this->GetValue('Mode'));
 
         if ($this->GetValue('Mode') !== self::MODE_AUTO) {
             $this->SetValue('DecisionText', 'Automatikprüfung übersprungen: Betriebsmodus ist nicht Automatik');
@@ -187,6 +233,9 @@ class IrrigationController extends IPSModule
 
         $rainValue = $this->ReadNumericPropertyVariable('RainLast24h');
         $rainThreshold = $this->ReadPropertyInteger('RainThreshold24h');
+        $this->Debug('EvaluateAutomatic.RainValue', $rainValue);
+        $this->Debug('EvaluateAutomatic.RainThreshold', $rainThreshold);
+
         if ($rainThreshold > 0 && $rainValue !== null && $rainValue >= $rainThreshold) {
             $msg = 'Automatik blockiert: Regensperre aktiv (' . $this->FormatNumber($rainValue) . ' mm / 24 h)';
             $this->SetValue('DecisionText', $msg);
@@ -195,6 +244,8 @@ class IrrigationController extends IPSModule
         }
 
         $effectiveMoisture = $this->GetEffectiveMoisture();
+        $this->Debug('EvaluateAutomatic.EffectiveMoisture', $effectiveMoisture);
+
         if ($effectiveMoisture === null) {
             $msg = 'Automatik nicht möglich: Kein gültiger Feuchtewert vorhanden';
             $this->SetValue('DecisionText', $msg);
@@ -203,6 +254,8 @@ class IrrigationController extends IPSModule
         }
 
         $threshold = $this->ReadPropertyInteger('MoistureThreshold');
+        $this->Debug('EvaluateAutomatic.MoistureThreshold', $threshold);
+
         if ($effectiveMoisture < $threshold) {
             $msg = 'Automatik startet Beregnung: Feuchte ' . $this->FormatNumber($effectiveMoisture) . ' % < ' . $threshold . ' %';
             $this->SetValue('DecisionText', $msg);
@@ -218,7 +271,12 @@ class IrrigationController extends IPSModule
 
     public function StartIrrigation()
     {
+        $this->Debug('StartIrrigation', 'gestartet');
+
         $durationMinutes = max(1, $this->ReadPropertyInteger('Duration'));
+        $this->Debug('StartIrrigation.DurationMinutes', $durationMinutes);
+        $this->Debug('StartIrrigation.StartPumpFirst', $this->ReadPropertyBoolean('StartPumpFirst'));
+        $this->Debug('StartIrrigation.PumpLeadTimeSeconds', $this->ReadPropertyInteger('PumpLeadTimeSeconds'));
 
         if ($this->ReadPropertyBoolean('StartPumpFirst')) {
             $this->SetActuatorState($this->ReadPropertyInteger('Pump'), true);
@@ -227,6 +285,9 @@ class IrrigationController extends IPSModule
 
         $zone1 = $this->ReadPropertyInteger('Valve1');
         $zone2 = $this->ReadPropertyInteger('Valve2');
+        $this->Debug('StartIrrigation.Zone1', $zone1);
+        $this->Debug('StartIrrigation.Zone2', $zone2);
+        $this->Debug('StartIrrigation.Pump', $this->ReadPropertyInteger('Pump'));
 
         $this->SetActuatorState($zone1, true);
         $this->SetActuatorState($zone2, true);
@@ -241,15 +302,23 @@ class IrrigationController extends IPSModule
         $this->SetValue('Zone2Active', $zone2 > 0);
 
         $this->SetTimerInterval('StopIrrigationTimer', $durationMinutes * 60 * 1000);
+        $this->Debug('StartIrrigation.StopTimerMs', $durationMinutes * 60 * 1000);
 
         $msg = 'Beregnung gestartet für ' . $durationMinutes . ' Minute(n)';
         $this->SetValue('DecisionText', $msg);
         $this->WriteLog($msg);
+        $this->Debug('StartIrrigation', 'abgeschlossen');
     }
 
     public function StopIrrigation()
     {
+        $this->Debug('StopIrrigation', 'gestartet');
         $this->SetTimerInterval('StopIrrigationTimer', 0);
+        $this->Debug('StopIrrigation.Timer', 0);
+
+        $this->Debug('StopIrrigation.Valve1', $this->ReadPropertyInteger('Valve1'));
+        $this->Debug('StopIrrigation.Valve2', $this->ReadPropertyInteger('Valve2'));
+        $this->Debug('StopIrrigation.Pump', $this->ReadPropertyInteger('Pump'));
 
         $this->SetActuatorState($this->ReadPropertyInteger('Valve1'), false);
         $this->SetActuatorState($this->ReadPropertyInteger('Valve2'), false);
@@ -263,6 +332,7 @@ class IrrigationController extends IPSModule
         $msg = 'Beregnung gestoppt';
         $this->SetValue('DecisionText', $msg);
         $this->WriteLog($msg);
+        $this->Debug('StopIrrigation', 'abgeschlossen');
     }
 
     private function RegisterProfiles()
@@ -301,8 +371,11 @@ class IrrigationController extends IPSModule
 
     private function MaintainWeekplan(string $Ident, string $Name)
     {
+        $this->Debug('MaintainWeekplan', ['Ident' => $Ident, 'Name' => $Name]);
+
         $eventID = @IPS_GetObjectIDByIdent($Ident, $this->InstanceID);
         if ($eventID === false) {
+            $this->Debug('MaintainWeekplan', 'Wochenplan existiert noch nicht, wird erstellt');
             $eventID = IPS_CreateEvent(2);
             IPS_SetParent($eventID, $this->InstanceID);
             IPS_SetIdent($eventID, $Ident);
@@ -323,6 +396,7 @@ class IrrigationController extends IPSModule
     private function UpdateWeekplanVisibility()
     {
         $mode = $this->ReadPropertyInteger('Mode');
+        $this->Debug('UpdateWeekplanVisibility.Mode', $mode);
 
         $timerEventID = @IPS_GetObjectIDByIdent('ScheduleTimer', $this->InstanceID);
         $autoEventID = @IPS_GetObjectIDByIdent('ScheduleAuto', $this->InstanceID);
@@ -340,23 +414,30 @@ class IrrigationController extends IPSModule
 
     private function RegisterSourceMessages()
     {
+        $this->Debug('RegisterSourceMessages', 'gestartet');
         $this->UnregisterSourceMessages();
 
         $ids = [];
         foreach (['MoistureSensor1', 'MoistureSensor2', 'RainLast24h'] as $property) {
             $id = $this->ReadPropertyInteger($property);
             if ($id > 0 && @IPS_VariableExists($id)) {
+                $this->Debug('RegisterSourceMessages.Register', ['Property' => $property, 'ID' => $id]);
                 $this->RegisterMessage($id, VM_UPDATE);
                 $ids[] = $id;
+            } else {
+                $this->Debug('RegisterSourceMessages.Skip', ['Property' => $property, 'ID' => $id]);
             }
         }
 
         $this->SetBuffer('RegisteredMessages', json_encode($ids));
+        $this->Debug('RegisterSourceMessages.Done', $ids);
     }
 
     private function UnregisterSourceMessages()
     {
         $ids = json_decode($this->GetBuffer('RegisteredMessages'), true);
+        $this->Debug('UnregisterSourceMessages', $ids);
+
         if (!is_array($ids)) {
             return;
         }
@@ -372,23 +453,36 @@ class IrrigationController extends IPSModule
 
     private function UpdateStatus()
     {
+        $this->Debug('UpdateStatus.Input', [
+            'Valve1' => $this->ReadPropertyInteger('Valve1'),
+            'Valve2' => $this->ReadPropertyInteger('Valve2'),
+            'Pump' => $this->ReadPropertyInteger('Pump')
+        ]);
+
         if (
             $this->ReadPropertyInteger('Valve1') <= 0 &&
             $this->ReadPropertyInteger('Valve2') <= 0 &&
             $this->ReadPropertyInteger('Pump') <= 0
         ) {
+            $this->Debug('UpdateStatus', 'SetStatus 200');
             $this->SetStatus(200);
             return;
         }
 
+        $this->Debug('UpdateStatus', 'SetStatus 102');
         $this->SetStatus(102);
     }
 
     private function GetEffectiveMoisture(): ?float
     {
+        $this->Debug('GetEffectiveMoisture', 'gestartet');
+
         $values = [];
         $sensor1 = $this->ReadNumericPropertyVariable('MoistureSensor1');
         $sensor2 = $this->ReadNumericPropertyVariable('MoistureSensor2');
+
+        $this->Debug('GetEffectiveMoisture.Sensor1', $sensor1);
+        $this->Debug('GetEffectiveMoisture.Sensor2', $sensor2);
 
         if ($sensor1 !== null) {
             $values[] = $sensor1;
@@ -399,29 +493,45 @@ class IrrigationController extends IPSModule
         }
 
         if (count($values) === 0) {
+            $this->Debug('GetEffectiveMoisture.Result', 'null');
             return null;
         }
 
         if (count($values) === 1) {
+            $this->Debug('GetEffectiveMoisture.Result', $values[0]);
             return $values[0];
         }
 
         if ($this->ReadPropertyBoolean('UseAverageMoisture')) {
-            return array_sum($values) / count($values);
+            $result = array_sum($values) / count($values);
+            $this->Debug('GetEffectiveMoisture.UseAverage', true);
+            $this->Debug('GetEffectiveMoisture.Result', $result);
+            return $result;
         }
 
-        return min($values);
+        $result = min($values);
+        $this->Debug('GetEffectiveMoisture.UseAverage', false);
+        $this->Debug('GetEffectiveMoisture.Result', $result);
+        return $result;
     }
 
     private function ReadNumericPropertyVariable(string $propertyName): ?float
     {
+        $this->Debug('ReadNumericPropertyVariable.Property', $propertyName);
+
         $variableID = $this->ReadPropertyInteger($propertyName);
+        $this->Debug('ReadNumericPropertyVariable.ID', $variableID);
+
         if ($variableID <= 0 || !@IPS_VariableExists($variableID)) {
+            $this->Debug('ReadNumericPropertyVariable', 'Variable fehlt oder ist ungültig');
             return null;
         }
 
         $value = @GetValue($variableID);
+        $this->Debug('ReadNumericPropertyVariable.Value', $value);
+
         if (!is_numeric($value)) {
+            $this->Debug('ReadNumericPropertyVariable', 'Wert ist nicht numerisch');
             return null;
         }
 
@@ -430,8 +540,13 @@ class IrrigationController extends IPSModule
 
     private function FormatSelectedVariableValue(string $propertyName): string
     {
+        $this->Debug('FormatSelectedVariableValue.Property', $propertyName);
+
         $variableID = $this->ReadPropertyInteger($propertyName);
+        $this->Debug('FormatSelectedVariableValue.ID', $variableID);
+
         if ($variableID <= 0 || !@IPS_VariableExists($variableID)) {
+            $this->Debug('FormatSelectedVariableValue', 'nicht konfiguriert');
             return 'nicht konfiguriert';
         }
 
@@ -441,53 +556,249 @@ class IrrigationController extends IPSModule
             $formatted = (string) @GetValue($variableID);
         }
 
-        return $name . ': ' . $formatted;
+        $result = $name . ': ' . $formatted;
+        $this->Debug('FormatSelectedVariableValue.Result', $result);
+        return $result;
     }
 
     private function SetActuatorState(int $targetID, bool $state): void
     {
-        if ($targetID <= 0 || !@IPS_ObjectExists($targetID)) {
-            return;
-        }
+        $this->Debug('SetActuatorState', ['TargetID' => $targetID, 'State' => $state]);
 
-        try {
-            @RequestAction($targetID, $state);
+        if ($targetID <= 0 || !@IPS_ObjectExists($targetID)) {
+            $this->Debug('SetActuatorState', 'Zielobjekt fehlt oder ist 0');
             return;
-        } catch (Throwable $e) {
         }
 
         $object = IPS_GetObject($targetID);
+        $this->Debug('SetActuatorState.Object', [
+            'ObjectID' => $targetID,
+            'ObjectName' => $object['ObjectName'],
+            'ObjectType' => $object['ObjectType'],
+            'ObjectIdent' => $object['ObjectIdent']
+        ]);
+
+        // RequestAction() muss auf die schaltbare Variable gehen, nicht auf die Instanz.
+        // Das ist besonders für xComfort-Aktoren wichtig.
         if ($object['ObjectType'] === OBJECTTYPE_VARIABLE) {
+            $this->SwitchVariable($targetID, $state);
+            return;
+        }
+
+        if ($object['ObjectType'] !== OBJECTTYPE_INSTANCE) {
+            $this->Debug('SetActuatorState', 'Ziel ist weder Variable noch Instanz');
+            return;
+        }
+
+        $switchVariableID = $this->FindSwitchVariable($targetID);
+        if ($switchVariableID <= 0) {
+            $this->Debug('SetActuatorState', 'keine schaltbare Kindvariable gefunden');
+            return;
+        }
+
+        $this->Debug('SetActuatorState.SwitchVariable', [
+            'InstanceID' => $targetID,
+            'VariableID' => $switchVariableID,
+            'VariableName' => IPS_GetName($switchVariableID)
+        ]);
+
+        $this->SwitchVariable($switchVariableID, $state);
+    }
+
+    private function FindSwitchVariable(int $instanceID): int
+    {
+        $children = $this->GetChildVariablesRecursive($instanceID, 3);
+        $this->Debug('FindSwitchVariable.ChildrenRecursive', $children);
+
+        $bestID = 0;
+        $bestScore = -9999;
+        $bestReason = '';
+
+        foreach ($children as $childID) {
+            if (!@IPS_VariableExists($childID)) {
+                continue;
+            }
+
+            $variable = IPS_GetVariable($childID);
+            $childObject = IPS_GetObject($childID);
+
+            $this->Debug('FindSwitchVariable.Child', [
+                'ID' => $childID,
+                'Name' => $childObject['ObjectName'],
+                'Ident' => $childObject['ObjectIdent'],
+                'Type' => $variable['VariableType'],
+                'Action' => $variable['VariableAction'],
+                'Profile' => $variable['VariableProfile'],
+                'CustomProfile' => $variable['VariableCustomProfile']
+            ]);
+
+            if ($variable['VariableType'] !== VARIABLETYPE_BOOLEAN) {
+                continue;
+            }
+
+            $haystack = strtolower($childObject['ObjectName'] . ' ' . $childObject['ObjectIdent'] . ' ' . $variable['VariableProfile'] . ' ' . $variable['VariableCustomProfile']);
+            $score = 0;
+            $reasons = [];
+
+            if ($variable['VariableAction'] > 0) {
+                $score += 100;
+                $reasons[] = 'has action';
+            }
+
+            $positiveTerms = [
+                'state' => 50,
+                'status' => 45,
+                'switch' => 45,
+                'schalter' => 45,
+                'relay' => 45,
+                'relais' => 45,
+                'output' => 45,
+                'ausgang' => 45,
+                'power' => 35,
+                'onoff' => 35,
+                'on/off' => 35,
+                'ein/aus' => 35,
+                'active' => 20,
+                'aktiv' => 20
+            ];
+
+            foreach ($positiveTerms as $term => $points) {
+                if (strpos($haystack, $term) !== false) {
+                    $score += $points;
+                    $reasons[] = '+' . $term;
+                }
+            }
+
+            $negativeTerms = [
+                'online' => 120,
+                'connected' => 120,
+                'reachable' => 120,
+                'available' => 100,
+                'update' => 100,
+                'firmware' => 100,
+                'cloud' => 80,
+                'overtemperature' => 80,
+                'overpower' => 80,
+                'error' => 70,
+                'fehler' => 70,
+                'alarm' => 70,
+                'battery' => 70,
+                'batterie' => 70,
+                'motion' => 50,
+                'bewegung' => 50,
+                'input' => 40,
+                'eingang' => 40
+            ];
+
+            foreach ($negativeTerms as $term => $points) {
+                if (strpos($haystack, $term) !== false) {
+                    $score -= $points;
+                    $reasons[] = '-' . $term;
+                }
+            }
+
+            $ident = $childObject['ObjectIdent'];
+            if (in_array($ident, ['STATE', 'State', 'state', 'STATUS', 'Status', 'status', 'Switch', 'SWITCH', 'Relay', 'RELAY', 'Output', 'OUTPUT', 'Power', 'POWER', 'OnOff'], true)) {
+                $score += 80;
+                $reasons[] = 'exact preferred ident';
+            }
+
+            $this->Debug('FindSwitchVariable.Score', [
+                'ID' => $childID,
+                'Score' => $score,
+                'Reasons' => $reasons
+            ]);
+
+            if ($score > $bestScore) {
+                $bestScore = $score;
+                $bestID = $childID;
+                $bestReason = implode(', ', $reasons);
+            }
+        }
+
+        if ($bestID > 0 && $bestScore > 0) {
+            $this->Debug('FindSwitchVariable.Result', [
+                'ID' => $bestID,
+                'Score' => $bestScore,
+                'Reason' => $bestReason
+            ]);
+            return $bestID;
+        }
+
+        $this->Debug('FindSwitchVariable.Result', 'keine passende schaltbare Bool-Variable gefunden');
+        return 0;
+    }
+
+    private function GetChildVariablesRecursive(int $parentID, int $maxDepth, int $currentDepth = 0): array
+    {
+        if ($currentDepth >= $maxDepth) {
+            return [];
+        }
+
+        $result = [];
+        $children = IPS_GetChildrenIDs($parentID);
+
+        foreach ($children as $childID) {
+            if (@IPS_VariableExists($childID)) {
+                $result[] = $childID;
+                continue;
+            }
+
+            if (@IPS_ObjectExists($childID)) {
+                $result = array_merge($result, $this->GetChildVariablesRecursive($childID, $maxDepth, $currentDepth + 1));
+            }
+        }
+
+        return $result;
+    }
+
+    private function SwitchVariable(int $variableID, bool $state): void
+    {
+        if ($variableID <= 0 || !@IPS_VariableExists($variableID)) {
+            $this->Debug('SwitchVariable', 'Variable fehlt oder ist ungültig');
+            return;
+        }
+
+        $variable = IPS_GetVariable($variableID);
+        $object = IPS_GetObject($variableID);
+
+        $this->Debug('SwitchVariable', [
+            'VariableID' => $variableID,
+            'Name' => $object['ObjectName'],
+            'Ident' => $object['ObjectIdent'],
+            'Type' => $variable['VariableType'],
+            'Action' => $variable['VariableAction'],
+            'State' => $state
+        ]);
+
+        if ($variable['VariableType'] !== VARIABLETYPE_BOOLEAN) {
+            $this->Debug('SwitchVariable', 'Variable ist nicht boolesch');
+            return;
+        }
+
+        // Wenn eine Aktion hinterlegt ist, wird damit der echte Aktor geschaltet.
+        if ($variable['VariableAction'] > 0) {
             try {
-                @RequestAction($targetID, $state);
+                RequestAction($variableID, $state);
+                $this->Debug('SwitchVariable', 'RequestAction erfolgreich');
                 return;
             } catch (Throwable $e) {
-                @SetValue($targetID, $state);
+                $this->Debug('SwitchVariable.RequestActionException', $e->getMessage());
+            }
+        } else {
+            $this->Debug('SwitchVariable', 'keine VariableAction vorhanden, RequestAction wird trotzdem versucht');
+            try {
+                RequestAction($variableID, $state);
+                $this->Debug('SwitchVariable', 'RequestAction ohne VariableAction erfolgreich');
                 return;
+            } catch (Throwable $e) {
+                $this->Debug('SwitchVariable.RequestActionNoActionException', $e->getMessage());
             }
         }
 
-        if ($object['ObjectType'] === OBJECTTYPE_INSTANCE) {
-            $children = IPS_GetChildrenIDs($targetID);
-            foreach ($children as $childID) {
-                if (!@IPS_VariableExists($childID)) {
-                    continue;
-                }
-
-                $var = IPS_GetVariable($childID);
-                if ($var['VariableType'] !== VARIABLETYPE_BOOLEAN) {
-                    continue;
-                }
-
-                try {
-                    @RequestAction($childID, $state);
-                    return;
-                } catch (Throwable $e) {
-                    @SetValue($childID, $state);
-                    return;
-                }
-            }
-        }
+        // Fallback nur für Dummy-/Statusvariablen. Das schaltet keinen echten Aktor.
+        @SetValue($variableID, $state);
+        $this->Debug('SwitchVariable', 'Fallback SetValue ausgeführt - Achtung: schaltet keinen echten Aktor, falls keine Aktion hinterlegt ist');
     }
 
     private function WriteLog(string $message): void
@@ -502,5 +813,27 @@ class IrrigationController extends IPSModule
         return number_format($value, 1, ',', '');
     }
 
-    
+    private function Debug(string $Message, $Data = null): void
+    {
+        if ($Data === null) {
+            $this->SendDebug('IRR', $Message, 0);
+            return;
+        }
+
+        if (is_array($Data) || is_object($Data)) {
+            $json = json_encode($Data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($json === false) {
+                $json = 'json_encode failed';
+            }
+            $this->SendDebug($Message, $json, 0);
+            return;
+        }
+
+        if (is_bool($Data)) {
+            $this->SendDebug($Message, $Data ? 'true' : 'false', 0);
+            return;
+        }
+
+        $this->SendDebug($Message, (string) $Data, 0);
+    }
 }
