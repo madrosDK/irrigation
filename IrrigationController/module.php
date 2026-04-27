@@ -43,15 +43,6 @@ class IrrigationController extends IPSModule
 
         $this->RegisterVariableBoolean('SequenceActive', 'Sequenz aktiv', '~Switch', 50);
         $this->EnableAction('SequenceActive');
-
-        // Diese beiden Variablen werden von den Wochenplänen geschaltet.
-        // Wichtig: Nur der Wert TRUE startet die jeweilige Sequenz; FALSE wird ignoriert.
-        $this->RegisterVariableBoolean('ScheduleTimerTrigger', 'Zeitsteuerung Trigger', '~Switch', 51);
-        $this->EnableAction('ScheduleTimerTrigger');
-
-        $this->RegisterVariableBoolean('ScheduleAutoTrigger', 'Automatik Trigger', '~Switch', 52);
-        $this->EnableAction('ScheduleAutoTrigger');
-
         $this->RegisterVariableBoolean('PumpActive', 'Pumpe aktiv', '~Switch', 60);
         $this->RegisterVariableInteger('CurrentZone', 'Aktueller Kreis', '', 70);
         $this->RegisterVariableInteger('QueueCount', 'Wartende Kreise', '', 80);
@@ -164,34 +155,51 @@ class IrrigationController extends IPSModule
                     $this->StopSequence();
                 }
                 break;
-
-            case 'ScheduleTimerTrigger':
-                $this->SetValue('ScheduleTimerTrigger', (bool) $Value);
-                $this->Debug('ScheduleTimerTrigger', ['Value' => (bool) $Value, 'Mode' => $this->GetValue('Mode')]);
-
-                if ((bool) $Value) {
-                    $this->HandleScheduleTimer(true);
-
-                    // sofort wieder zurücksetzen, damit der nächste EIN-Schaltpunkt wieder sicher auslöst
-                    $this->SetValue('ScheduleTimerTrigger', false);
-                }
-                break;
-
-            case 'ScheduleAutoTrigger':
-                $this->SetValue('ScheduleAutoTrigger', (bool) $Value);
-                $this->Debug('ScheduleAutoTrigger', ['Value' => (bool) $Value, 'Mode' => $this->GetValue('Mode')]);
-
-                if ((bool) $Value) {
-                    $this->HandleScheduleAuto(true);
-
-                    // sofort wieder zurücksetzen, damit der nächste EIN-Schaltpunkt wieder sicher auslöst
-                    $this->SetValue('ScheduleAutoTrigger', false);
-                }
-                break;
-
             default:
                 throw new Exception('Unbekannte Aktion: ' . $Ident);
         }
+    }
+
+    public function HandleScheduleTimer(bool $state): void
+    {
+        $this->Debug('HandleScheduleTimer', [
+            'State' => $state,
+            'Mode' => $this->GetValue('Mode')
+        ]);
+
+        // Nur EIN auswerten. AUS wird ignoriert.
+        if (!$state) {
+            $this->Debug('HandleScheduleTimer', 'AUS ignoriert');
+            return;
+        }
+
+        if ($this->GetValue('Mode') !== self::MODE_TIME) {
+            $this->Debug('HandleScheduleTimer', 'ignoriert: Betriebsmodus ist nicht Zeitsteuerung');
+            return;
+        }
+
+        $this->StartManualSequence();
+    }
+
+    public function HandleScheduleAuto(bool $state): void
+    {
+        $this->Debug('HandleScheduleAuto', [
+            'State' => $state,
+            'Mode' => $this->GetValue('Mode')
+        ]);
+
+        // Nur EIN auswerten. AUS wird ignoriert.
+        if (!$state) {
+            $this->Debug('HandleScheduleAuto', 'AUS ignoriert');
+            return;
+        }
+
+        if ($this->GetValue('Mode') !== self::MODE_AUTO) {
+            $this->Debug('HandleScheduleAuto', 'ignoriert: Betriebsmodus ist nicht Automatik');
+            return;
+        }
+
+        $this->StartAutomaticSequence();
     }
 
     public function CreateZone(): void
@@ -671,20 +679,11 @@ class IrrigationController extends IPSModule
 
     private function MaintainWeekplan(string $Ident, string $Name): void
     {
-        $targetVariableID = ($Ident === 'ScheduleTimer')
-            ? $this->GetIDForIdent('ScheduleTimerTrigger')
-            : $this->GetIDForIdent('ScheduleAutoTrigger');
-
-        $eventID = @IPS_GetObjectIDByIdent($Ident, $targetVariableID);
-        if ($eventID === false) {
-            // Kompatibilität: Falls ein alter Wochenplan noch direkt unter der Instanz liegt.
-            $eventID = @IPS_GetObjectIDByIdent($Ident, $this->InstanceID);
-        }
-
+        $eventID = @IPS_GetObjectIDByIdent($Ident, $this->InstanceID);
         if ($eventID === false) {
             $this->Debug('MaintainWeekplan', 'erstelle ' . $Name);
             $eventID = IPS_CreateEvent(2);
-            IPS_SetParent($eventID, $targetVariableID);
+            IPS_SetParent($eventID, $this->InstanceID);
             IPS_SetIdent($eventID, $Ident);
             IPS_SetName($eventID, $Name);
 
@@ -695,25 +694,30 @@ class IrrigationController extends IPSModule
             IPS_SetEventActive($eventID, false);
         }
 
-        // Wichtig:
-        // Wochenpläne müssen in IP-Symcon unter der zu schaltenden Variable liegen.
-        // Dann schaltet der Wochenplan die Variable mit den Action-Werten false/true.
-        if (@IPS_GetParent($eventID) !== $targetVariableID) {
-            @IPS_SetParent($eventID, $targetVariableID);
+        // Falls ein alter Wochenplan aus V3.7 unter einer Trigger-Variable liegt,
+        // wieder direkt unter die Master-Instanz verschieben.
+        if (@IPS_GetParent($eventID) !== $this->InstanceID) {
+            @IPS_SetParent($eventID, $this->InstanceID);
         }
 
-        // Aktion 0 = Aus -> setzt Variable auf false, wird in RequestAction ignoriert
-        // Aktion 1 = Ein -> setzt Variable auf true, RequestAction startet Sequenz
+        // Aktion 0 = Aus, wird ignoriert
+        // Aktion 1 = Ein, startet die Sequenz, sofern der passende Betriebsmodus aktiv ist
         @IPS_SetEventScheduleAction($eventID, 0, 'Aus', 0x808080, false);
         @IPS_SetEventScheduleAction($eventID, 1, 'Ein', 0x27AE60, true);
 
-        // Kein EventScript mehr verwenden.
-        @IPS_SetEventScript($eventID, '');
+        if ($Ident === 'ScheduleTimer') {
+            $script = 'IRR_HandleScheduleTimer(' . $this->InstanceID . ', (bool)$_IPS["ACTION"]);';
+        } else {
+            $script = 'IRR_HandleScheduleAuto(' . $this->InstanceID . ', (bool)$_IPS["ACTION"]);';
+        }
+
+        @IPS_SetEventScript($eventID, $script);
 
         $this->Debug('MaintainWeekplan.Done', [
             'Ident' => $Ident,
             'EventID' => $eventID,
-            'TargetVariableID' => $targetVariableID
+            'Parent' => @IPS_GetParent($eventID),
+            'Script' => $script
         ]);
     }
 
@@ -721,11 +725,8 @@ class IrrigationController extends IPSModule
     {
         $mode = $this->ReadPropertyInteger('Mode');
 
-        $timerVariableID = $this->GetIDForIdent('ScheduleTimerTrigger');
-        $autoVariableID = $this->GetIDForIdent('ScheduleAutoTrigger');
-
-        $timerEventID = @IPS_GetObjectIDByIdent('ScheduleTimer', $timerVariableID);
-        $autoEventID = @IPS_GetObjectIDByIdent('ScheduleAuto', $autoVariableID);
+        $timerEventID = @IPS_GetObjectIDByIdent('ScheduleTimer', $this->InstanceID);
+        $autoEventID = @IPS_GetObjectIDByIdent('ScheduleAuto', $this->InstanceID);
 
         if ($timerEventID !== false) {
             IPS_SetHidden($timerEventID, $mode !== self::MODE_TIME);

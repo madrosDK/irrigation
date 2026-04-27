@@ -80,3 +80,26 @@ Wichtig:
 - Nur `Ein` startet eine Sequenz.
 - `Aus` wird ignoriert.
 - Nach `Ein` setzt das Modul den Trigger automatisch wieder auf `false`, damit der nächste Ein-Schaltpunkt wieder auslöst.
+
+
+## Fix V3.7.1
+
+- Fehlende Methoden `HandleScheduleTimer()` und `HandleScheduleAuto()` ergänzt.
+- Fehler `Call to undefined method IrrigationController::HandleScheduleTimer()` behoben.
+
+
+## Änderung V3.8 – keine Trigger-Schalter mehr
+
+Die sichtbaren Trigger-Variablen wurden entfernt.
+
+Die Wochenpläne liegen wieder direkt unter der Master-Instanz:
+
+- `Zeitsteuerung`
+- `Automatik`
+
+Wenn der jeweilige Wochenplan auf **Ein** schaltet, startet automatisch die passende Sequenz:
+
+- Modus `Zeitsteuerung` + Wochenplan `Zeitsteuerung` = alle aktiven Kreise nacheinander
+- Modus `Automatik` + Wochenplan `Automatik` = nur aktive Kreise mit Feuchtebedarf
+
+`Aus` wird weiterhin ignoriert.
