@@ -78,3 +78,11 @@ Bewässerung Master
 - Keine Position `900 + Kreisnummer` mehr.
 - Neue Kreise werden direkt unter der Master-Instanz angelegt.
 - IP-Symcon-Objekt-IDs werden nicht manuell vergeben.
+
+
+## Fix V3.4.3
+
+- Kreis-Anlage protokolliert nun detailliert im Debugfenster.
+- Nach `IPS_CreateInstance()` wird der Parent sofort gesetzt und geprüft.
+- Wenn das Verschieben unter die Master-Instanz nicht klappt, wird die Zone-ID in `Letzte Aktion` gemeldet.
+- Objektposition `900 + Kreisnummer` wurde wieder ergänzt, aber nur als Sortierposition, nicht als Objekt-ID.
