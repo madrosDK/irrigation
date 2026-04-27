@@ -64,3 +64,19 @@ Wenn der Wochenplan **Automatik** auf **Ein** schaltet:
 ### Laufende Sequenz
 
 Wenn bereits eine Sequenz läuft und ein neuer Schaltpunkt kommt, wird dieser ignoriert.
+
+
+## Fix V3.7 – Wochenplan-Auslösung
+
+Die Wochenpläne hängen jetzt unter eigenen Trigger-Variablen:
+
+- `Zeitsteuerung Trigger`
+- `Automatik Trigger`
+
+Der Wochenplan schaltet diese Variable auf `true`.
+Dadurch läuft die Auswertung zuverlässig über `RequestAction()`.
+
+Wichtig:
+- Nur `Ein` startet eine Sequenz.
+- `Aus` wird ignoriert.
+- Nach `Ein` setzt das Modul den Trigger automatisch wieder auf `false`, damit der nächste Ein-Schaltpunkt wieder auslöst.
