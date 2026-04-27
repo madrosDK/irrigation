@@ -242,6 +242,8 @@ class IrrigationController extends IPSModule
 
     public function RefreshZones(): void
     {
+        $this->Debug('RefreshZones', 'gestartet');
+
         $zones = $this->GetZones();
         $parts = [];
 
@@ -249,9 +251,22 @@ class IrrigationController extends IPSModule
             $parts[] = '#' . $zoneID . ' | Kreis ' . @IRRZ_GetZoneNumber($zoneID) . ' | ' . @IPS_GetName($zoneID);
         }
 
-        $this->SetValue('ZoneOverview', count($parts) > 0 ? implode("\n", $parts) : 'Keine Kreise unter dieser Master-Instanz gefunden');
+        $this->SetValue('ZoneOverview', count($parts) > 0 ? implode("
+", $parts) : 'Keine Kreise unter dieser Master-Instanz gefunden');
         $this->SetValue('QueueCount', count($this->GetQueue()));
-        $this->Debug('RefreshZones', ['Zones' => $zones]);
+
+        // Wichtig:
+        // Der Button "Kreise aktualisieren" muss auch den Instanzstatus neu berechnen.
+        // Sonst bleibt der Master auf Fehler, bis ApplyChanges durch irgendeine Formularänderung ausgelöst wird.
+        $this->UpdateWeekplanVisibility();
+        $this->UpdateStatus();
+
+        $this->Debug('RefreshZones.Done', [
+            'Zones' => $zones,
+            'ZoneCount' => count($zones),
+            'HasPumpConfigured' => $this->HasPumpConfigured(),
+            'Status' => IPS_GetInstance($this->InstanceID)['InstanceStatus']
+        ]);
     }
 
     public function StartManualSequence(): void
@@ -708,9 +723,9 @@ class IrrigationController extends IPSModule
         // direkt PHP-Code hinterlegen.
         // Der Code prüft den aktuellen Betriebsmodus und startet nur dann.
         if ($Ident === 'ScheduleTimer') {
-            $script = 'if (IPS_GetProperty(' . $this->InstanceID . ', "Mode") == ' . self::MODE_TIME . ') { IRR_StartManualSequence(' . $this->InstanceID . '); }';
+            $script = 'IRR_StartManualSequence(' . $this->InstanceID . ');';
         } else {
-            $script = 'if (IPS_GetProperty(' . $this->InstanceID . ', "Mode") == ' . self::MODE_AUTO . ') { IRR_StartAutomaticSequence(' . $this->InstanceID . '); }';
+            $script = 'IRR_StartAutomaticSequence(' . $this->InstanceID . ');';
         }
 
         @IPS_SetEventScheduleAction($eventID, 1, 'Ein', 0x27AE60, $script);
@@ -753,17 +768,31 @@ class IrrigationController extends IPSModule
     private function UpdateStatus(): void
     {
         $zones = $this->GetZones();
+        $hasPump = $this->HasPumpConfigured();
 
         $this->Debug('UpdateStatus', [
             'ZoneCount' => count($zones),
-            'HasPumpConfigured' => $this->HasPumpConfigured()
+            'HasPumpConfigured' => $hasPump,
+            'PumpInstance' => $this->ReadPropertyInteger('PumpInstance'),
+            'PumpVariableCompat' => $this->ReadPropertyInteger('PumpVariable'),
+            'LegacyPump' => $this->ReadPropertyInteger('Pump')
         ]);
 
-        if (count($zones) === 0 || !$this->HasPumpConfigured()) {
+        if (count($zones) === 0 || !$hasPump) {
+            $reason = [];
+            if (count($zones) === 0) {
+                $reason[] = 'keine Kreise gefunden';
+            }
+            if (!$hasPump) {
+                $reason[] = 'keine Pumpe konfiguriert';
+            }
+
+            $this->SetValue('DecisionText', 'Konfiguration unvollständig: ' . implode(', ', $reason));
             $this->SetStatus(200);
             return;
         }
 
+        $this->SetValue('DecisionText', 'Bereit: ' . count($zones) . ' Kreis(e) gefunden');
         $this->SetStatus(102);
     }
 

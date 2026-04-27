@@ -120,3 +120,18 @@ Bei der Aktion **Ein** wird direkt PHP-Code hinterlegt:
   `IRR_StartAutomaticSequence(...)`
 
 Die Aktion **Aus** bleibt leer und wird nicht verwendet.
+
+
+## Fix V3.11 – Kreise aktualisieren setzt Status neu
+
+Der Button **Kreise aktualisieren** ruft jetzt zusätzlich auf:
+
+- `UpdateWeekplanVisibility()`
+- `UpdateStatus()`
+
+Damit wird die Master-Instanz sofort wieder aktiv, sobald Kreise und Pumpe vorhanden sind.
+Es ist nicht mehr nötig, erst eine Formulareigenschaft wie den Pumpenaktor zu ändern.
+
+Zusätzlich wurde die Wochenplan-Aktion vereinfacht:
+- Zeitsteuerung Ein: `IRR_StartManualSequence(...)`
+- Automatik Ein: `IRR_StartAutomaticSequence(...)`
