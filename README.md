@@ -103,3 +103,23 @@ Wenn der jeweilige Wochenplan auf **Ein** schaltet, startet automatisch die pass
 - Modus `Automatik` + Wochenplan `Automatik` = nur aktive Kreise mit Feuchtebedarf
 
 `Aus` wird weiterhin ignoriert.
+
+
+## Fix V3.9 – Wochenplan startet Sequenz zuverlässig
+
+Die sichtbaren Trigger-Schalter bleiben entfernt.
+
+Intern gibt es jetzt zwei versteckte Boolean-Variablen:
+
+- `Zeitsteuerung Trigger intern`
+- `Automatik Trigger intern`
+
+Die Wochenpläne liegen unter diesen versteckten Variablen und schalten sie auf `true`.
+
+Das Modul reagiert darauf über `MessageSink()`:
+
+- Zeitsteuerung Trigger `true` → Sequenz Zeitsteuerung starten
+- Automatik Trigger `true` → Automatikprüfung starten
+- `false` wird ignoriert
+
+Die Trigger-Variablen sind ausgeblendet und nicht als sichtbare Buttons gedacht.
