@@ -15,14 +15,14 @@
           ]
         },
         {
-          "name": "DefaultDuration",
-          "type": "NumberSpinner",
-          "caption": "Standard-Beregnungsdauer je Kreis (Minuten)"
-        },
-        {
           "name": "PumpLeadTimeSeconds",
           "type": "NumberSpinner",
           "caption": "Pumpenvorlauf vor jedem Kreis (Sekunden)"
+        },
+        {
+          "name": "PumpEarlyOffSeconds",
+          "type": "NumberSpinner",
+          "caption": "Pumpe vor Ende des letzten Kreises ausschalten (Sekunden)"
         },
         {
           "name": "PauseBetweenZonesSeconds",
@@ -43,16 +43,11 @@
         {
           "name": "PumpInstance",
           "type": "SelectInstance",
-          "caption": "Pumpenaktor Instanz (Shelly/xComfort, optional)"
-        },
-        {
-          "name": "PumpVariable",
-          "type": "SelectVariable",
-          "caption": "Pumpen-Schaltvariable Bool (optional, wird bevorzugt)"
+          "caption": "Pumpenaktor (Shelly oder xComfort)"
         },
         {
           "type": "Label",
-          "caption": "Tipp: Wenn die Instanz nicht zuverlässig schaltet, wähle direkt die boolesche Schaltvariable des Aktors aus."
+          "caption": "Das Modul sucht unter der gewählten Instanz automatisch die passende schaltbare Bool-Variable und schaltet diese per RequestAction."
         }
       ]
     }

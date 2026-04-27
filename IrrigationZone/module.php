@@ -13,7 +13,7 @@ class IrrigationZone extends IPSModule
 
         $this->RegisterPropertyBoolean('Enabled', true);
         $this->RegisterPropertyInteger('ZoneNumber', 1);
-        $this->RegisterPropertyInteger('Duration', 0);
+        $this->RegisterPropertyInteger('Duration', 10);
         $this->RegisterPropertyInteger('MoistureThreshold', 35);
         $this->RegisterPropertyInteger('MoistureMode', self::MOISTURE_LOWEST);
 
@@ -23,10 +23,8 @@ class IrrigationZone extends IPSModule
         $this->RegisterPropertyInteger('RainThreshold24h', 0);
 
         $this->RegisterPropertyInteger('Actuator1Instance', 0);
-        $this->RegisterPropertyInteger('Actuator1Variable', 0);
-        $this->RegisterPropertyInteger('Actuator2Instance', 0);
-        $this->RegisterPropertyInteger('Actuator2Variable', 0);
-
+                $this->RegisterPropertyInteger('Actuator2Instance', 0);
+        
         // Kompatibilität zu alten V3.1-Konfigurationen
         $this->RegisterPropertyInteger('Valve1', 0);
         $this->RegisterPropertyInteger('Valve2', 0);
@@ -142,7 +140,7 @@ class IrrigationZone extends IPSModule
                 break;
 
             case 'DurationMinutes':
-                IPS_SetProperty($this->InstanceID, 'Duration', max(0, (int) $Value));
+                IPS_SetProperty($this->InstanceID, 'Duration', max(1, (int) $Value));
                 IPS_ApplyChanges($this->InstanceID);
                 break;
 
@@ -340,16 +338,16 @@ class IrrigationZone extends IPSModule
             'State' => $state
         ]);
 
-        // Wichtig:
-        // Es wird immer eine Bool-Schaltvariable gesucht und dann per RequestAction() geschaltet.
-        // Das ist der richtige Weg für Shelly/xComfort in IP-Symcon.
-        if ($variable > 0) {
-            $this->SetActuatorState($variable, $state);
+        // Das Formular bietet nur Instanzen an.
+        // Das Modul sucht darunter automatisch die richtige schaltbare Bool-Variable und schaltet per RequestAction().
+        if ($instance > 0) {
+            $this->SetActuatorState($instance, $state);
             return;
         }
 
-        if ($instance > 0) {
-            $this->SetActuatorState($instance, $state);
+        if ($variable > 0) {
+            // Kompatibilität zu V3.3, falls schon eine direkte Variable gespeichert war
+            $this->SetActuatorState($variable, $state);
             return;
         }
 

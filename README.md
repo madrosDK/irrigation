@@ -1,4 +1,4 @@
-# irrigation V3.3
+# irrigation V3.4
 
 Fix-Version zur Master-/Kreis-Struktur.
 
@@ -51,3 +51,15 @@ Bewässerung Master
 - Die direkte Bool-Schaltvariable wird bevorzugt.
 - Geschaltet wird immer über `RequestAction()` auf die Bool-Schaltvariable.
 - Es gibt keinen `SetValue()`-Fallback mehr, da dadurch bei Shelly/xComfort oft nur der Variablenwert geändert wird, aber der Aktor nicht wirklich schaltet.
+
+
+## Änderung V3.4
+
+- Im Formular werden bei Pumpe und Kreisen nur noch Instanzen ausgewählt.
+- Keine separate Bool-Schaltvariable mehr im Formular.
+- Das Modul sucht selbstständig unter der Instanz die passende schaltbare Bool-Variable.
+- Geschaltet wird weiterhin per `RequestAction()` auf diese Bool-Variable.
+- Die Standarddauer im Master wurde entfernt.
+- Jeder Kreis besitzt seine eigene Beregnungsdauer.
+- Neu: Pumpe kann vor Ende des letzten Kreises um eine einstellbare Sekundenanzahl abgeschaltet werden.
+- Neu angelegte Kreise erhalten Position `900 + Kreisnummer`, damit sie im Objektbaum unten stehen.
