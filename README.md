@@ -105,21 +105,18 @@ Wenn der jeweilige Wochenplan auf **Ein** schaltet, startet automatisch die pass
 `Aus` wird weiterhin ignoriert.
 
 
-## Fix V3.9 – Wochenplan startet Sequenz zuverlässig
+## Änderung V3.10 – Wochenplan-Aktion mit direktem PHP-Code
 
-Die sichtbaren Trigger-Schalter bleiben entfernt.
+Die interne Trigger-Varianten wurden rückgängig gemacht.
 
-Intern gibt es jetzt zwei versteckte Boolean-Variablen:
+Die Wochenpläne liegen direkt unter der Master-Instanz.
 
-- `Zeitsteuerung Trigger intern`
-- `Automatik Trigger intern`
+Bei der Aktion **Ein** wird direkt PHP-Code hinterlegt:
 
-Die Wochenpläne liegen unter diesen versteckten Variablen und schalten sie auf `true`.
+- Zeitsteuerung:
+  `IRR_StartManualSequence(...)`
 
-Das Modul reagiert darauf über `MessageSink()`:
+- Automatik:
+  `IRR_StartAutomaticSequence(...)`
 
-- Zeitsteuerung Trigger `true` → Sequenz Zeitsteuerung starten
-- Automatik Trigger `true` → Automatikprüfung starten
-- `false` wird ignoriert
-
-Die Trigger-Variablen sind ausgeblendet und nicht als sichtbare Buttons gedacht.
+Die Aktion **Aus** bleibt leer und wird nicht verwendet.
