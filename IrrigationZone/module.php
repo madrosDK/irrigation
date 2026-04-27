@@ -22,14 +22,18 @@ class IrrigationZone extends IPSModule
         $this->RegisterPropertyInteger('RainLast24h', 0);
         $this->RegisterPropertyInteger('RainThreshold24h', 0);
 
-        $this->RegisterPropertyInteger('Valve1Instance', 0);
-        $this->RegisterPropertyInteger('Valve1Variable', 0);
-        $this->RegisterPropertyInteger('Valve2Instance', 0);
-        $this->RegisterPropertyInteger('Valve2Variable', 0);
+        $this->RegisterPropertyInteger('Actuator1Instance', 0);
+        $this->RegisterPropertyInteger('Actuator1Variable', 0);
+        $this->RegisterPropertyInteger('Actuator2Instance', 0);
+        $this->RegisterPropertyInteger('Actuator2Variable', 0);
 
         // Kompatibilität zu alten V3.1-Konfigurationen
         $this->RegisterPropertyInteger('Valve1', 0);
         $this->RegisterPropertyInteger('Valve2', 0);
+        $this->RegisterPropertyInteger('Valve1Instance', 0);
+        $this->RegisterPropertyInteger('Valve1Variable', 0);
+        $this->RegisterPropertyInteger('Valve2Instance', 0);
+        $this->RegisterPropertyInteger('Valve2Variable', 0);
 
         $this->RegisterProfiles();
 
@@ -47,8 +51,8 @@ class IrrigationZone extends IPSModule
         $this->RegisterVariableInteger('MoistureModeValue', 'Feuchteauswertung', 'IRRZ.MoistureMode', 45);
         $this->EnableAction('MoistureModeValue');
 
-        $this->RegisterVariableBoolean('Valve1Active', 'Aktor 1 aktiv', '~Switch', 50);
-        $this->RegisterVariableBoolean('Valve2Active', 'Aktor 2 aktiv', '~Switch', 60);
+        $this->RegisterVariableBoolean('Actuator1Active', 'Aktor 1 aktiv', '~Switch', 50);
+        $this->RegisterVariableBoolean('Actuator2Active', 'Aktor 2 aktiv', '~Switch', 60);
         $this->RegisterVariableBoolean('ZoneActive', 'Kreis aktiv bewässert', '~Switch', 70);
         $this->EnableAction('ZoneActive');
 
@@ -113,10 +117,10 @@ class IrrigationZone extends IPSModule
             'Duration' => $this->ReadPropertyInteger('Duration'),
             'MoistureThreshold' => $this->ReadPropertyInteger('MoistureThreshold'),
             'MoistureMode' => $this->ReadPropertyInteger('MoistureMode'),
-            'Valve1Instance' => $this->ReadPropertyInteger('Valve1Instance'),
-            'Valve1Variable' => $this->ReadPropertyInteger('Valve1Variable'),
-            'Valve2Instance' => $this->ReadPropertyInteger('Valve2Instance'),
-            'Valve2Variable' => $this->ReadPropertyInteger('Valve2Variable'),
+            'Actuator1Instance' => $this->ReadPropertyInteger('Actuator1Instance'),
+            'Actuator1Variable' => $this->ReadPropertyInteger('Actuator1Variable'),
+            'Actuator2Instance' => $this->ReadPropertyInteger('Actuator2Instance'),
+            'Actuator2Variable' => $this->ReadPropertyInteger('Actuator2Variable'),
             'LegacyValve1' => $this->ReadPropertyInteger('Valve1'),
             'LegacyValve2' => $this->ReadPropertyInteger('Valve2')
         ]);
@@ -270,8 +274,8 @@ class IrrigationZone extends IPSModule
         $this->SetZoneActuatorState(1, true);
         $this->SetZoneActuatorState(2, true);
 
-        $this->SetValue('Valve1Active', $this->HasValveConfigured(1));
-        $this->SetValue('Valve2Active', $this->HasValveConfigured(2));
+        $this->SetValue('Actuator1Active', $this->HasActuatorConfigured(1));
+        $this->SetValue('Actuator2Active', $this->HasActuatorConfigured(2));
         $this->SetValue('ZoneActive', true);
 
         $this->WriteLog('Kreis ' . $this->ReadPropertyInteger('ZoneNumber') . ' gestartet');
@@ -284,8 +288,8 @@ class IrrigationZone extends IPSModule
         $this->SetZoneActuatorState(1, false);
         $this->SetZoneActuatorState(2, false);
 
-        $this->SetValue('Valve1Active', false);
-        $this->SetValue('Valve2Active', false);
+        $this->SetValue('Actuator1Active', false);
+        $this->SetValue('Actuator2Active', false);
         $this->SetValue('ZoneActive', false);
 
         $this->WriteLog('Kreis ' . $this->ReadPropertyInteger('ZoneNumber') . ' gestoppt');
@@ -309,12 +313,20 @@ class IrrigationZone extends IPSModule
     private function SetZoneActuatorState(int $number, bool $state): void
     {
         if ($number === 1) {
-            $variable = $this->ReadPropertyInteger('Valve1Variable');
-            $instance = $this->ReadPropertyInteger('Valve1Instance');
+            $variable = $this->ReadPropertyInteger('Actuator1Variable');
+            $instance = $this->ReadPropertyInteger('Actuator1Instance');
+
+            // Kompatibilität zu alten V3.1/V3.2 Properties
+            $legacyVariable = $this->ReadPropertyInteger('Valve1Variable');
+            $legacyInstance = $this->ReadPropertyInteger('Valve1Instance');
             $legacy = $this->ReadPropertyInteger('Valve1');
         } else {
-            $variable = $this->ReadPropertyInteger('Valve2Variable');
-            $instance = $this->ReadPropertyInteger('Valve2Instance');
+            $variable = $this->ReadPropertyInteger('Actuator2Variable');
+            $instance = $this->ReadPropertyInteger('Actuator2Instance');
+
+            // Kompatibilität zu alten V3.1/V3.2 Properties
+            $legacyVariable = $this->ReadPropertyInteger('Valve2Variable');
+            $legacyInstance = $this->ReadPropertyInteger('Valve2Instance');
             $legacy = $this->ReadPropertyInteger('Valve2');
         }
 
@@ -322,10 +334,15 @@ class IrrigationZone extends IPSModule
             'Number' => $number,
             'Variable' => $variable,
             'Instance' => $instance,
+            'LegacyVariable' => $legacyVariable,
+            'LegacyInstance' => $legacyInstance,
             'Legacy' => $legacy,
             'State' => $state
         ]);
 
+        // Wichtig:
+        // Es wird immer eine Bool-Schaltvariable gesucht und dann per RequestAction() geschaltet.
+        // Das ist der richtige Weg für Shelly/xComfort in IP-Symcon.
         if ($variable > 0) {
             $this->SetActuatorState($variable, $state);
             return;
@@ -336,21 +353,37 @@ class IrrigationZone extends IPSModule
             return;
         }
 
+        if ($legacyVariable > 0) {
+            $this->SetActuatorState($legacyVariable, $state);
+            return;
+        }
+
+        if ($legacyInstance > 0) {
+            $this->SetActuatorState($legacyInstance, $state);
+            return;
+        }
+
         if ($legacy > 0) {
             $this->SetActuatorState($legacy, $state);
             return;
         }
+
+        $this->Debug('SetZoneActuatorState', 'kein Aktor für Nummer ' . $number . ' konfiguriert');
     }
 
-    private function HasValveConfigured(int $number): bool
+    private function HasActuatorConfigured(int $number): bool
     {
         if ($number === 1) {
-            return $this->ReadPropertyInteger('Valve1Variable') > 0
+            return $this->ReadPropertyInteger('Actuator1Variable') > 0
+                || $this->ReadPropertyInteger('Actuator1Instance') > 0
+                || $this->ReadPropertyInteger('Valve1Variable') > 0
                 || $this->ReadPropertyInteger('Valve1Instance') > 0
                 || $this->ReadPropertyInteger('Valve1') > 0;
         }
 
-        return $this->ReadPropertyInteger('Valve2Variable') > 0
+        return $this->ReadPropertyInteger('Actuator2Variable') > 0
+            || $this->ReadPropertyInteger('Actuator2Instance') > 0
+            || $this->ReadPropertyInteger('Valve2Variable') > 0
             || $this->ReadPropertyInteger('Valve2Instance') > 0
             || $this->ReadPropertyInteger('Valve2') > 0;
     }
@@ -450,8 +483,7 @@ class IrrigationZone extends IPSModule
             $this->Debug('SetActuatorState.RequestActionException', $e->getMessage());
         }
 
-        @SetValue($switchVariableID, $state);
-        $this->Debug('SetActuatorState', ['SwitchVariableID' => $switchVariableID, 'Method' => 'SetValue-Fallback']);
+        $this->Debug('SetActuatorState', 'nicht geschaltet: RequestAction fehlgeschlagen. Kein SetValue-Fallback, weil das Aktoren nicht zuverlässig schaltet.');
     }
 
     private function FindSwitchVariable(int $targetID): int
@@ -558,7 +590,7 @@ class IrrigationZone extends IPSModule
             return;
         }
 
-        if (!$this->HasValveConfigured(1) && !$this->HasValveConfigured(2)) {
+        if (!$this->HasActuatorConfigured(1) && !$this->HasActuatorConfigured(2)) {
             $this->SetStatus(200);
             return;
         }

@@ -66,24 +66,24 @@
       "caption": "Aktoren",
       "items": [
         {
-          "name": "Valve1Instance",
+          "name": "Actuator1Instance",
           "type": "SelectInstance",
-          "caption": "Aktor 1 Instanz (optional)"
+          "caption": "Aktor 1 Instanz (Shelly/xComfort, optional)"
         },
         {
-          "name": "Valve1Variable",
+          "name": "Actuator1Variable",
           "type": "SelectVariable",
           "caption": "Aktor 1 Schaltvariable Bool (optional, wird bevorzugt)"
         },
         {
-          "name": "Valve2Instance",
+          "name": "Actuator2Instance",
           "type": "SelectInstance",
-          "caption": "Aktor 2 Instanz optional"
+          "caption": "Aktor 2 Instanz (Shelly/xComfort, optional)"
         },
         {
-          "name": "Valve2Variable",
+          "name": "Actuator2Variable",
           "type": "SelectVariable",
-          "caption": "Aktor 2 Schaltvariable Bool optional, wird bevorzugt"
+          "caption": "Aktor 2 Schaltvariable Bool (optional, wird bevorzugt)"
         }
       ]
     }
@@ -124,7 +124,7 @@
     {
       "code": 200,
       "icon": "error",
-      "caption": "Kreis unvollständig konfiguriert"
+      "caption": "Kein Aktor konfiguriert"
     }
   ]
 }

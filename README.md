@@ -1,4 +1,4 @@
-# irrigation V3.2
+# irrigation V3.3
 
 Fix-Version zur Master-/Kreis-Struktur.
 
@@ -40,3 +40,14 @@ Bewässerung Master
 ├── Kreis 2
 └── Kreis 3
 ```
+
+
+## Änderung V3.3
+
+- Pro Kreis gibt es nur noch **Aktor 1** und **Aktor 2**.
+- Beide Aktoren sind optional.
+- Ein Aktor kann Shelly oder xComfort sein.
+- Für jeden Aktor kann entweder die Instanz oder direkt die Bool-Schaltvariable gewählt werden.
+- Die direkte Bool-Schaltvariable wird bevorzugt.
+- Geschaltet wird immer über `RequestAction()` auf die Bool-Schaltvariable.
+- Es gibt keinen `SetValue()`-Fallback mehr, da dadurch bei Shelly/xComfort oft nur der Variablenwert geändert wird, aber der Aktor nicht wirklich schaltet.

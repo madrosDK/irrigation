@@ -518,8 +518,7 @@ class IrrigationController extends IPSModule
             $this->Debug('SetActuatorState.RequestActionException', $e->getMessage());
         }
 
-        @SetValue($switchVariableID, $state);
-        $this->Debug('SetActuatorState', ['SwitchVariableID' => $switchVariableID, 'Method' => 'SetValue-Fallback']);
+        $this->Debug('SetActuatorState', 'nicht geschaltet: RequestAction fehlgeschlagen. Kein SetValue-Fallback, weil das Aktoren nicht zuverlässig schaltet.');
     }
 
     private function FindSwitchVariable(int $targetID): int
