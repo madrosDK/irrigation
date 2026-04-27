@@ -70,3 +70,11 @@ Bewässerung Master
 - Fehlende Kompatibilitäts-Properties `Actuator1Variable` und `Actuator2Variable` wieder registriert.
 - Alte Property-Namen aus V3.1-V3.3 bleiben intern kompatibel, erscheinen aber nicht im Formular.
 - Kreis-Anlage robuster gemacht: Wenn `IPS_CreateInstance()` fehlschlägt, wird nicht mehr mit Instanz `0` weitergearbeitet.
+
+
+## Fix V3.4.2
+
+- Kreis-Anlage wieder wie in V3.3.
+- Keine Position `900 + Kreisnummer` mehr.
+- Neue Kreise werden direkt unter der Master-Instanz angelegt.
+- IP-Symcon-Objekt-IDs werden nicht manuell vergeben.

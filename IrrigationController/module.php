@@ -201,19 +201,23 @@ class IrrigationController extends IPSModule
             return;
         }
 
+        // Wieder wie in V3.3:
+        // Instanz direkt unter die Master-Instanz hängen.
+        // Keine Position 900+, keine spätere Parent-Änderung.
+        IPS_SetParent($zoneID, $this->InstanceID);
         IPS_SetName($zoneID, 'Kreis ' . $number);
-        IPS_SetPosition($zoneID, 900 + $number);
         IPS_SetProperty($zoneID, 'ZoneNumber', $number);
         IPS_ApplyChanges($zoneID);
-
-        // Erst nach erfolgreichem Erstellen und Anwenden unter den Master hängen.
-        IPS_SetParent($zoneID, $this->InstanceID);
 
         $this->RefreshZones();
         $this->UpdateStatus();
 
         $this->WriteLog('Kreis ' . $number . ' angelegt');
-        $this->Debug('CreateZone', ['ZoneID' => $zoneID, 'Number' => $number]);
+        $this->Debug('CreateZone', [
+            'ZoneID' => $zoneID,
+            'ParentID' => $this->InstanceID,
+            'Number' => $number
+        ]);
     }
 
     public function RefreshZones(): void
