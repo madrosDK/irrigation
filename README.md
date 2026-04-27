@@ -86,3 +86,15 @@ Bewässerung Master
 - Nach `IPS_CreateInstance()` wird der Parent sofort gesetzt und geprüft.
 - Wenn das Verschieben unter die Master-Instanz nicht klappt, wird die Zone-ID in `Letzte Aktion` gemeldet.
 - Objektposition `900 + Kreisnummer` wurde wieder ergänzt, aber nur als Sortierposition, nicht als Objekt-ID.
+
+
+## Fix V3.4.4
+
+- Kreis-Anlage wieder exakt im einfachen V3.3-Ablauf:
+  1. `IPS_CreateInstance()`
+  2. `IPS_SetParent()`
+  3. `IPS_SetName()`
+  4. `IPS_SetProperty()`
+  5. `IPS_ApplyChanges()`
+- Keine Sortierposition `900 + Kreisnummer`.
+- Keine zusätzliche Parent-Retry-Logik.

@@ -162,17 +162,7 @@ class IrrigationController extends IPSModule
 
     public function CreateZone(): void
     {
-        $this->Debug('CreateZone', [
-            'Step' => 'gestartet',
-            'MasterID' => $this->InstanceID,
-            'MasterExists' => @IPS_InstanceExists($this->InstanceID),
-            'MasterParent' => @IPS_GetParent($this->InstanceID)
-        ]);
-
-        if (!@IPS_InstanceExists($this->InstanceID)) {
-            $this->WriteLog('Master-Instanz existiert nicht, Kreis kann nicht angelegt werden');
-            return;
-        }
+        $this->Debug('CreateZone', 'gestartet');
 
         $zones = $this->GetZones();
         $maxZones = max(1, min(10, $this->ReadPropertyInteger('MaxZones')));
@@ -183,11 +173,8 @@ class IrrigationController extends IPSModule
         }
 
         $used = [];
-        foreach ($zones as $existingZoneID) {
-            $zoneNumber = @IRRZ_GetZoneNumber($existingZoneID);
-            if (is_int($zoneNumber)) {
-                $used[] = $zoneNumber;
-            }
+        foreach ($zones as $zoneID) {
+            $used[] = @IRRZ_GetZoneNumber($zoneID);
         }
 
         $number = 1;
@@ -200,71 +187,17 @@ class IrrigationController extends IPSModule
             return;
         }
 
-        $zoneID = @IPS_CreateInstance(self::MODULE_ID_ZONE);
-
-        $this->Debug('CreateZone.Created', [
-            'ZoneID' => $zoneID,
-            'ZoneExists' => ($zoneID > 0 ? @IPS_InstanceExists($zoneID) : false)
-        ]);
-
-        if ($zoneID === false || $zoneID === 0 || !@IPS_InstanceExists($zoneID)) {
-            $this->WriteLog('Kreis konnte nicht angelegt werden. Prüfe, ob das Modul "Irrigation Zone" installiert/geladen ist.');
-            $this->Debug('CreateZone.Error', [
-                'CreatedID' => $zoneID,
-                'ZoneModuleID' => self::MODULE_ID_ZONE
-            ]);
-            return;
-        }
-
-        // Wichtig: Parent sofort nach dem Erstellen setzen und danach prüfen.
-        $setParentResult = @IPS_SetParent($zoneID, $this->InstanceID);
-        $actualParent = @IPS_GetParent($zoneID);
-
-        $this->Debug('CreateZone.ParentSet', [
-            'ZoneID' => $zoneID,
-            'WantedParent' => $this->InstanceID,
-            'ActualParent' => $actualParent,
-            'SetParentResult' => $setParentResult
-        ]);
-
-        if ($actualParent !== $this->InstanceID) {
-            // Zweiter Versuch, falls Symcon direkt nach IPS_CreateInstance noch nicht sauber umgehängt hat.
-            IPS_Sleep(200);
-            $setParentResult2 = @IPS_SetParent($zoneID, $this->InstanceID);
-            $actualParent2 = @IPS_GetParent($zoneID);
-
-            $this->Debug('CreateZone.ParentSetRetry', [
-                'ZoneID' => $zoneID,
-                'WantedParent' => $this->InstanceID,
-                'ActualParent' => $actualParent2,
-                'SetParentResult' => $setParentResult2
-            ]);
-
-            if ($actualParent2 !== $this->InstanceID) {
-                $this->WriteLog('Kreis wurde angelegt, konnte aber nicht unter die Master-Instanz verschoben werden. Zone-ID: ' . $zoneID);
-                return;
-            }
-        }
-
+        $zoneID = IPS_CreateInstance(self::MODULE_ID_ZONE);
+        IPS_SetParent($zoneID, $this->InstanceID);
         IPS_SetName($zoneID, 'Kreis ' . $number);
         IPS_SetProperty($zoneID, 'ZoneNumber', $number);
-
-        // Damit neue Kreise unten unter der Master-Instanz stehen, nur die Objektposition setzen.
-        // Es wird keine Objekt-ID beeinflusst.
-        @IPS_SetPosition($zoneID, 900 + $number);
-
         IPS_ApplyChanges($zoneID);
 
         $this->RefreshZones();
         $this->UpdateStatus();
 
         $this->WriteLog('Kreis ' . $number . ' angelegt');
-        $this->Debug('CreateZone.Done', [
-            'ZoneID' => $zoneID,
-            'ParentID' => @IPS_GetParent($zoneID),
-            'Number' => $number,
-            'Name' => @IPS_GetName($zoneID)
-        ]);
+        $this->Debug('CreateZone', ['ZoneID' => $zoneID, 'Number' => $number]);
     }
 
     public function RefreshZones(): void
