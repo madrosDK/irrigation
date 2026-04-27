@@ -34,3 +34,33 @@ Nach dem Kopieren:
 4. Neue Kreise testweise anlegen
 
 Falls noch alte, falsch platzierte Kreise im Root liegen, diese bitte löschen.
+
+
+## Änderung V3.6 – Wochenplan-Logik
+
+Die Wochenpläne lösen jetzt direkt die Sequenz aus.
+
+### Zeitsteuerung
+
+Wenn der Wochenplan **Zeitsteuerung** auf **Ein** schaltet:
+
+- nur wenn Betriebsmodus = `Zeitsteuerung`
+- nur der Schaltpunkt `Ein` wird ausgewertet
+- `Aus` wird ignoriert
+- alle aktiven Kreise werden nacheinander bewässert
+- jeder Kreis läuft für seine eigene eingestellte Beregnungsdauer
+
+### Automatik
+
+Wenn der Wochenplan **Automatik** auf **Ein** schaltet:
+
+- nur wenn Betriebsmodus = `Automatik`
+- nur der Schaltpunkt `Ein` wird ausgewertet
+- `Aus` wird ignoriert
+- aktive Kreise werden einzeln geprüft
+- Kreise mit `Automatik sagt nein` werden übersprungen
+- Kreise mit Bewässerungsbedarf laufen nacheinander
+
+### Laufende Sequenz
+
+Wenn bereits eine Sequenz läuft und ein neuer Schaltpunkt kommt, wird dieser ignoriert.

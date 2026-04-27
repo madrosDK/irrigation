@@ -218,7 +218,7 @@ class IrrigationController extends IPSModule
     {
         $this->Debug('StartManualSequence', 'gestartet');
         $zones = $this->GetRunnableZones(false);
-        $this->StartQueue($zones, 'Zeitsteuerung / Manuell');
+        $this->StartQueue($zones, 'Zeitsteuerung');
     }
 
     public function StartAutomaticSequence(): void
@@ -372,8 +372,9 @@ class IrrigationController extends IPSModule
         $this->Debug('StartQueue', ['Source' => $source, 'Zones' => $zones]);
 
         if ($this->GetValue('SequenceActive')) {
-            $this->Debug('StartQueue', 'Sequenz läuft bereits, stoppe zuerst');
-            $this->StopSequence();
+            $this->Debug('StartQueue', 'Sequenz läuft bereits, neuer Start wird ignoriert');
+            $this->WriteLog('Sequenz läuft bereits - neuer Start ignoriert');
+            return;
         }
 
         if (count($zones) === 0) {
@@ -409,26 +410,47 @@ class IrrigationController extends IPSModule
                 'Automatic' => $automatic
             ]);
 
+            // Inaktive Kreise immer überspringen.
             if (!$enabled) {
+                $this->Debug('GetRunnableZones.Skip', [
+                    'ID' => $zoneID,
+                    'Number' => $number,
+                    'Reason' => 'Kreis inaktiv'
+                ]);
                 continue;
             }
 
-            if ($automatic) {
-                $shouldWater = @IRRZ_ShouldWater($zoneID);
-                $this->Debug('GetRunnableZones.ShouldWater', [
+            // Zeitsteuerung:
+            // Alle aktiven Kreise werden übernommen.
+            if (!$automatic) {
+                $result[] = $zoneID;
+                continue;
+            }
+
+            // Automatik:
+            // Kreis entscheidet anhand Feuchte/Regen selbst, ob bewässert werden soll.
+            @IRRZ_RefreshValues($zoneID);
+            $shouldWater = @IRRZ_ShouldWater($zoneID);
+
+            $this->Debug('GetRunnableZones.ShouldWater', [
+                'ID' => $zoneID,
+                'Number' => $number,
+                'ShouldWater' => $shouldWater
+            ]);
+
+            if (!$shouldWater) {
+                $this->Debug('GetRunnableZones.Skip', [
                     'ID' => $zoneID,
                     'Number' => $number,
-                    'ShouldWater' => $shouldWater
+                    'Reason' => 'Automatik sagt nein'
                 ]);
-
-                if (!$shouldWater) {
-                    continue;
-                }
+                continue;
             }
 
             $result[] = $zoneID;
         }
 
+        $this->Debug('GetRunnableZones.Result', $result);
         return $result;
     }
 
@@ -625,6 +647,8 @@ class IrrigationController extends IPSModule
             IPS_SetIdent($eventID, $Ident);
             IPS_SetName($eventID, $Name);
 
+            // Aktion 0 = Aus, wird ignoriert
+            // Aktion 1 = Ein, startet je nach Wochenplan die Sequenz
             IPS_SetEventScheduleAction($eventID, 0, 'Aus', 0x808080, false);
             IPS_SetEventScheduleAction($eventID, 1, 'Ein', 0x27AE60, true);
 
@@ -634,6 +658,17 @@ class IrrigationController extends IPSModule
 
             IPS_SetEventActive($eventID, false);
         }
+
+        // Entscheidend:
+        // Wochenplan-Aktion per EventScript auswerten.
+        // Nur ACTION == 1 wird im Handler verarbeitet.
+        if ($Ident === 'ScheduleTimer') {
+            $script = 'IRR_HandleScheduleTimer(' . $this->InstanceID . ', (bool)$_IPS["ACTION"]);';
+        } else {
+            $script = 'IRR_HandleScheduleAuto(' . $this->InstanceID . ', (bool)$_IPS["ACTION"]);';
+        }
+
+        @IPS_SetEventScript($eventID, $script);
     }
 
     private function UpdateWeekplanVisibility(): void
