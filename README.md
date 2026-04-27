@@ -63,3 +63,10 @@ Bewässerung Master
 - Jeder Kreis besitzt seine eigene Beregnungsdauer.
 - Neu: Pumpe kann vor Ende des letzten Kreises um eine einstellbare Sekundenanzahl abgeschaltet werden.
 - Neu angelegte Kreise erhalten Position `900 + Kreisnummer`, damit sie im Objektbaum unten stehen.
+
+
+## Fix V3.4.1
+
+- Fehlende Kompatibilitäts-Properties `Actuator1Variable` und `Actuator2Variable` wieder registriert.
+- Alte Property-Namen aus V3.1-V3.3 bleiben intern kompatibel, erscheinen aber nicht im Formular.
+- Kreis-Anlage robuster gemacht: Wenn `IPS_CreateInstance()` fehlschlägt, wird nicht mehr mit Instanz `0` weitergearbeitet.
