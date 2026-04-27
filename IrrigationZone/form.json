@@ -77,7 +77,7 @@
         },
         {
           "type": "Label",
-          "caption": "Beide Aktoren sind optional. Das Modul sucht unter der gewählten Instanz automatisch die passende schaltbare Bool-Variable und schaltet diese per RequestAction."
+          "caption": "Beide Aktoren sind optional. Das Modul sucht unter der Instanz automatisch die passende schaltbare Bool-Variable und schaltet diese mit RequestAction."
         }
       ]
     }

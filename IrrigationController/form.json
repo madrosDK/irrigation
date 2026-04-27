@@ -47,7 +47,7 @@
         },
         {
           "type": "Label",
-          "caption": "Das Modul sucht unter der gewählten Instanz automatisch die passende schaltbare Bool-Variable und schaltet diese per RequestAction."
+          "caption": "Das Modul sucht unter der Instanz automatisch die passende schaltbare Bool-Variable und schaltet diese mit RequestAction."
         }
       ]
     }

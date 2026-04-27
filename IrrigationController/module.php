@@ -22,8 +22,9 @@ class IrrigationController extends IPSModule
 
         // V3.2: Instanz oder direkte Schaltvariable möglich.
         $this->RegisterPropertyInteger('PumpInstance', 0);
-        // Kompatibilität zu alten V3.1-V3.3-Konfigurationen
         $this->RegisterPropertyInteger('PumpVariable', 0);
+
+        // Kompatibilität zu alten V3.1-Konfigurationen
         $this->RegisterPropertyInteger('Pump', 0);
 
         $this->RegisterProfiles();
@@ -128,6 +129,7 @@ class IrrigationController extends IPSModule
                 IPS_ApplyChanges($this->InstanceID);
                 break;
 
+
             case 'PumpLeadTimeSeconds':
                 IPS_SetProperty($this->InstanceID, 'PumpLeadTimeSeconds', max(0, (int) $Value));
                 IPS_ApplyChanges($this->InstanceID);
@@ -162,8 +164,6 @@ class IrrigationController extends IPSModule
 
     public function CreateZone(): void
     {
-        $this->Debug('CreateZone', 'gestartet');
-
         $zones = $this->GetZones();
         $maxZones = max(1, min(10, $this->ReadPropertyInteger('MaxZones')));
 
@@ -235,7 +235,6 @@ class IrrigationController extends IPSModule
         $this->SetTimerInterval('StartCurrentZoneAfterPumpTimer', 0);
         $this->SetTimerInterval('StopPumpEarlyTimer', 0);
         $this->SetTimerInterval('StopCurrentZoneTimer', 0);
-        $this->SetTimerInterval('StopPumpEarlyTimer', 0);
         $this->SetTimerInterval('StartNextZoneTimer', 0);
 
         $currentZoneID = (int) $this->GetBuffer('CurrentZoneID');
@@ -306,7 +305,6 @@ class IrrigationController extends IPSModule
     {
         $this->Debug('StartCurrentZoneAfterPumpLead', 'gestartet');
         $this->SetTimerInterval('StartCurrentZoneAfterPumpTimer', 0);
-        $this->SetTimerInterval('StopPumpEarlyTimer', 0);
 
         $zoneID = (int) $this->GetBuffer('CurrentZoneID');
         if ($zoneID <= 0 || !@IPS_InstanceExists($zoneID)) {
@@ -332,12 +330,9 @@ class IrrigationController extends IPSModule
         $this->SetTimerInterval('StopPumpEarlyTimer', 0);
         if (count($queue) === 0 && $earlyOffSeconds > 0) {
             if ($earlyOffSeconds >= $durationSeconds) {
-                $this->Debug('PumpEarlyOff', 'Frühabschaltung >= Kreisdauer, Pumpe wird sofort nach Kreisstart ausgeschaltet');
                 $this->StopPumpEarly();
             } else {
-                $pumpOffMs = ($durationSeconds - $earlyOffSeconds) * 1000;
-                $this->Debug('PumpEarlyOff.TimerMs', $pumpOffMs);
-                $this->SetTimerInterval('StopPumpEarlyTimer', $pumpOffMs);
+                $this->SetTimerInterval('StopPumpEarlyTimer', ($durationSeconds - $earlyOffSeconds) * 1000);
             }
         }
 
@@ -489,13 +484,13 @@ class IrrigationController extends IPSModule
 
     private function SetPumpState(bool $state): void
     {
-        $pumpVariable = $this->ReadPropertyInteger('PumpVariable');
         $pumpInstance = $this->ReadPropertyInteger('PumpInstance');
+        $pumpVariable = $this->ReadPropertyInteger('PumpVariable');
         $legacyPump = $this->ReadPropertyInteger('Pump');
 
         $this->Debug('SetPumpState', [
-            'PumpVariable' => $pumpVariable,
             'PumpInstance' => $pumpInstance,
+            'PumpVariableCompat' => $pumpVariable,
             'LegacyPump' => $legacyPump,
             'State' => $state
         ]);
@@ -507,7 +502,6 @@ class IrrigationController extends IPSModule
         }
 
         if ($pumpVariable > 0) {
-            // Kompatibilität zu V3.2/V3.3
             $this->SetActuatorState($pumpVariable, $state);
             $this->SetValue('PumpActive', $state);
             return;
@@ -553,7 +547,7 @@ class IrrigationController extends IPSModule
             $this->Debug('SetActuatorState.RequestActionException', $e->getMessage());
         }
 
-        $this->Debug('SetActuatorState', 'nicht geschaltet: RequestAction fehlgeschlagen. Kein SetValue-Fallback, weil das Aktoren nicht zuverlässig schaltet.');
+        $this->Debug('SetActuatorState', 'nicht geschaltet: RequestAction fehlgeschlagen. Kein SetValue-Fallback.');
     }
 
     private function FindSwitchVariable(int $targetID): int
