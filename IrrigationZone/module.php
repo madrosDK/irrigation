@@ -335,9 +335,11 @@ class IrrigationZone extends IPSModule
             'Actuator1Instance' => $this->ReadPropertyInteger('Actuator1Instance'),
             'Actuator2Instance' => $this->ReadPropertyInteger('Actuator2Instance'),
             'DelayBetweenActuatorsMs' => $delayMs,
-            'Order' => 'Aktor2 zuerst, wenn beide vorhanden'
+            'Order' => 'Aktor2 zuerst AUS'
         ]);
 
+        // Nur bei manuellem Stop steuert der Kreis die Pumpe.
+        // Bei Zeitsteuerung/Automatik macht das der Master.
         if (!$FromMaster) {
             $earlyOffSeconds = $this->GetMasterPumpEarlyOffSeconds();
             $this->Debug('StopZone.ManualPumpEarlyOff', [
@@ -354,23 +356,22 @@ class IrrigationZone extends IPSModule
         $has1 = $this->HasActuatorConfigured(1);
         $has2 = $this->HasActuatorConfigured(2);
 
-        if ($has1 && $has2) {
+        // Wichtig für Sequenzbetrieb:
+        // Aktor 2 wird immer explizit ausgeschaltet, wenn er konfiguriert ist.
+        // Nicht vom Statuswert abhängig machen.
+        if ($has2) {
+            $this->Debug('StopZone', 'Schalte Aktor 2 AUS');
             $this->SetZoneActuatorState(2, false);
+        }
 
-            if ($delayMs > 0) {
-                $this->Debug('StopZone.DelayBeforeActuator1', $delayMs);
-                IPS_Sleep($delayMs);
-            }
+        if ($has1 && $has2 && $delayMs > 0) {
+            $this->Debug('StopZone.DelayBeforeActuator1', $delayMs);
+            IPS_Sleep($delayMs);
+        }
 
+        if ($has1) {
+            $this->Debug('StopZone', 'Schalte Aktor 1 AUS');
             $this->SetZoneActuatorState(1, false);
-        } else {
-            if ($has2) {
-                $this->SetZoneActuatorState(2, false);
-            }
-
-            if ($has1) {
-                $this->SetZoneActuatorState(1, false);
-            }
         }
 
         $this->SetValue('Actuator1Active', false);

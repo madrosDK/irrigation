@@ -266,3 +266,11 @@ Beobachtung:
 - Danach wird um die eingestellte Pause gewartet.
 - Danach wird Aktor 1 geschaltet.
 - Beim Ausschalten wird ebenfalls Aktor 2 zuerst ausgeschaltet.
+
+
+## Fix V3.33 – Aktor 2 im Sequenzbetrieb ausschalten
+
+- Master ruft Kreis-Start/Stop jetzt sicher mit `FromMaster = true` auf.
+- `StopZone()` schaltet Aktor 2 im Sequenzbetrieb immer explizit aus, wenn er konfiguriert ist.
+- Aktor 2 wird beim Stop zuerst ausgeschaltet, danach mit Pause Aktor 1.
+- Das Ausschalten hängt nicht mehr vom Statuswert `Actuator2Active` ab.
