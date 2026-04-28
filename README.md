@@ -167,3 +167,15 @@ Zusätzlich wurde die Wochenplan-Aktion vereinfacht:
 - Das hilft vor allem bei xComfort-Gateways, die zwei direkte Schaltbefehle hintereinander nicht sauber verarbeiten.
 - Die Suche nach der Schaltvariable prüft jetzt auch eine Ebene unterhalb der Aktor-Instanz.
 - Variablen ohne `VariableAction` werden stark abgewertet.
+
+
+## Fix V3.15 – Aktor 2 zeitversetzt per Timer
+
+Wenn nur Aktor 2 konfiguriert war, wurde er bereits geschaltet.  
+Wenn Aktor 1 und Aktor 2 gemeinsam konfiguriert waren, blockierte offenbar der erste Schaltbefehl den zweiten.
+
+Änderung:
+- Aktor 1 wird sofort geschaltet.
+- Aktor 2 wird danach per eigenem Timer zeitversetzt geschaltet.
+- Die Pause kommt aus `Pause zwischen Aktor 1 und Aktor 2 (Millisekunden)`.
+- Gleiches gilt beim Ausschalten.
