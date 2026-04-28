@@ -66,7 +66,7 @@ class IrrigationZone extends IPSModule
         $this->RegisterVariableFloat('ComputedMoisture', 'Berechnete Feuchte', 'IRR.PercentFloat', 130);
         $this->RegisterVariableBoolean('ShouldWater', 'Automatik: Bewässern', '~Switch', 140);
         $this->RegisterVariableString('DecisionText', 'Entscheidung', '', 150);
-        $this->RegisterVariableString('LastAction', 'Letzte 4 Aktionen', '', 160);
+        $this->RegisterVariableString('LastAction', 'Letzte 4 Aktionen', '~HTMLBox', 160);
 
         $this->SetBuffer('RegisteredMessages', json_encode([]));
         $this->SetBuffer('Actuator1SwitchVariableID', '0');
@@ -897,28 +897,50 @@ class IrrigationZone extends IPSModule
 
     private function WriteLog(string $message): void
     {
-        $line = date('d.m.Y H:i:s') . ' - ' . $message;
+        $entries = [];
+        $buffer = $this->GetBuffer('LastActionLog');
 
-        $old = $this->GetValue('LastAction');
-        $lines = [];
-
-        if (is_string($old) && trim($old) !== '') {
-            $lines = preg_split('/
-|
-|
-/', trim($old));
-            if (!is_array($lines)) {
-                $lines = [];
+        if (is_string($buffer) && trim($buffer) !== '') {
+            $decoded = json_decode($buffer, true);
+            if (is_array($decoded)) {
+                $entries = $decoded;
             }
         }
 
-        array_unshift($lines, $line);
-        $lines = array_slice($lines, 0, 4);
+        array_unshift($entries, [
+            'time'    => date('d.m.Y H:i:s'),
+            'message' => $message
+        ]);
 
-        $this->SetValue('LastAction', implode("
-", $lines));
+        $entries = array_slice($entries, 0, 4);
+        $this->SetBuffer('LastActionLog', json_encode($entries));
+        $this->SetValue('LastAction', $this->RenderLastActionHtml($entries));
+
         IPS_LogMessage('IRRZ[' . $this->InstanceID . ']', $message);
         $this->Debug('WriteLog', $message);
+    }
+
+    private function RenderLastActionHtml(array $entries): string
+    {
+        if (count($entries) === 0) {
+            return '';
+        }
+
+        $html = '<div style="font-family:Arial, sans-serif; font-size:13px; line-height:1.45;">';
+
+        foreach ($entries as $entry) {
+            $time = isset($entry['time']) ? htmlspecialchars((string) $entry['time'], ENT_QUOTES, 'UTF-8') : '';
+            $message = isset($entry['message']) ? htmlspecialchars((string) $entry['message'], ENT_QUOTES, 'UTF-8') : '';
+
+            $html .= '<div style="margin-bottom:4px; padding:2px 0;">';
+            $html .= '<span style="color:#0066cc; font-weight:bold;">' . $time . '</span>';
+            $html .= '<span style="color:#666;"> &ndash; </span>';
+            $html .= '<span style="color:#222;">' . $message . '</span>';
+            $html .= '</div>';
+        }
+
+        $html .= '</div>';
+        return $html;
     }
 
     private function FormatNumber(float $value): string
