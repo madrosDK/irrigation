@@ -204,6 +204,8 @@ class IrrigationController extends IPSModule
 
     public function CreateZone(): void
     {
+        $this->Debug('CreateZone', 'gestartet');
+
         $zones = $this->GetZones();
         $maxZones = max(1, min(10, $this->ReadPropertyInteger('MaxZones')));
 
@@ -214,7 +216,10 @@ class IrrigationController extends IPSModule
 
         $used = [];
         foreach ($zones as $zoneID) {
-            $used[] = @IRRZ_GetZoneNumber($zoneID);
+            $zoneNumber = @IRRZ_GetZoneNumber($zoneID);
+            if (is_int($zoneNumber)) {
+                $used[] = $zoneNumber;
+            }
         }
 
         $number = 1;
@@ -227,7 +232,20 @@ class IrrigationController extends IPSModule
             return;
         }
 
-        $zoneID = IPS_CreateInstance(self::MODULE_ID_ZONE);
+        try {
+            $zoneID = IPS_CreateInstance(self::MODULE_ID_ZONE);
+        } catch (Throwable $e) {
+            $this->WriteLog('Kreis konnte nicht angelegt werden: ' . $e->getMessage());
+            $this->Debug('CreateZone.Exception', $e->getMessage());
+            return;
+        }
+
+        if (!is_int($zoneID) || $zoneID <= 0 || !@IPS_InstanceExists($zoneID)) {
+            $this->WriteLog('Kreis konnte nicht angelegt werden. Ungültige Instanz-ID: ' . (string)$zoneID);
+            $this->Debug('CreateZone.InvalidID', $zoneID);
+            return;
+        }
+
         IPS_SetParent($zoneID, $this->InstanceID);
         IPS_SetName($zoneID, 'Kreis ' . $number);
         IPS_SetProperty($zoneID, 'ZoneNumber', $number);

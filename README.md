@@ -196,12 +196,10 @@ Wenn Aktor 1 und Aktor 2 gemeinsam konfiguriert waren, blockierte offenbar der e
 - Dadurch werden die Einträge im IP-Symcon WebFront wirklich untereinander angezeigt.
 
 
-## Rollback V3.20
+## Fix V3.25 – Timer-Duplikat beim Kreisanlegen
 
-Diese Version setzt den fehlerhaften Umbau mit `ActionHistory` wieder zurück.
-Basis ist der Stand vor V3.18/V3.19.
-
-Hinweis:
-- Falls nach V3.19 bereits Instanzen beschädigt sind, Moduldateien mit dieser Version ersetzen.
-- Danach in IP-Symcon Module neu laden.
-- Anschließend bei Master und Kreisen einmal `Änderungen übernehmen`.
+- Timer `StartActuator2Timer` und `StopActuator2Timer` werden jetzt sicher registriert.
+- Wenn sie bereits vorhanden sind, werden sie nicht erneut angelegt.
+- Das verhindert den Fehler „Timer ... ist bereits vorhanden“.
+- Kreis-Anlage im Master prüft jetzt, ob `IPS_CreateInstance()` wirklich eine gültige Instanz-ID zurückgegeben hat.
+- Dadurch wird nicht mehr mit Instanz `#0` weitergearbeitet.

@@ -68,8 +68,8 @@ class IrrigationZone extends IPSModule
         $this->RegisterVariableString('DecisionText', 'Entscheidung', '', 150);
         $this->RegisterVariableString('LastAction', 'Letzte 10 Aktionen', '', 160);
 
-        $this->RegisterTimer('StartActuator2Timer', 0, 'IRRZ_StartActuator2Delayed($_IPS[\'TARGET\']);');
-        $this->RegisterTimer('StopActuator2Timer', 0, 'IRRZ_StopActuator2Delayed($_IPS[\'TARGET\']);');
+        $this->RegisterTimerSafe('StartActuator2Timer', 0, 'IRRZ_StartActuator2Delayed($_IPS[\'TARGET\']);');
+        $this->RegisterTimerSafe('StopActuator2Timer', 0, 'IRRZ_StopActuator2Delayed($_IPS[\'TARGET\']);');
 
         $this->SetBuffer('RegisteredMessages', json_encode([]));
         $this->Debug('Create', 'Zone initialisiert');
@@ -773,8 +773,8 @@ class IrrigationZone extends IPSModule
             }
         }
 
-        $this->RegisterTimer('StartActuator2Timer', 0, 'IRRZ_StartActuator2Delayed($_IPS[\'TARGET\']);');
-        $this->RegisterTimer('StopActuator2Timer', 0, 'IRRZ_StopActuator2Delayed($_IPS[\'TARGET\']);');
+        $this->RegisterTimerSafe('StartActuator2Timer', 0, 'IRRZ_StartActuator2Delayed($_IPS[\'TARGET\']);');
+        $this->RegisterTimerSafe('StopActuator2Timer', 0, 'IRRZ_StopActuator2Delayed($_IPS[\'TARGET\']);');
 
         $this->SetBuffer('RegisteredMessages', json_encode([]));
     }
@@ -818,6 +818,21 @@ class IrrigationZone extends IPSModule
             IPS_CreateVariableProfile('IRRZ.MoistureMode', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileAssociation('IRRZ.MoistureMode', self::MOISTURE_LOWEST, 'Niedrigster Wert', '', 0xFFB300);
             IPS_SetVariableProfileAssociation('IRRZ.MoistureMode', self::MOISTURE_AVERAGE, 'Durchschnitt', '', 0x27AE60);
+        }
+    }
+
+    private function RegisterTimerSafe(string $Ident, int $Interval, string $Script): void
+    {
+        $timerID = @IPS_GetObjectIDByIdent($Ident, $this->InstanceID);
+        if ($timerID === false) {
+            $this->RegisterTimer($Ident, $Interval, $Script);
+            return;
+        }
+
+        if (@IPS_EventExists($timerID)) {
+            @IPS_SetEventScript($timerID, $Script);
+            @IPS_SetEventCyclic($timerID, 0, 0, 0, 0, 1, 0);
+            $this->SetTimerInterval($Ident, $Interval);
         }
     }
 
