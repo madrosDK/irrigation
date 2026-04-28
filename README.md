@@ -179,3 +179,11 @@ Wenn Aktor 1 und Aktor 2 gemeinsam konfiguriert waren, blockierte offenbar der e
 - Aktor 2 wird danach per eigenem Timer zeitversetzt geschaltet.
 - Die Pause kommt aus `Pause zwischen Aktor 1 und Aktor 2 (Millisekunden)`.
 - Gleiches gilt beim Ausschalten.
+
+
+## Änderung V3.16 – bessere Übersicht
+
+- `Letzte Aktion` heißt jetzt `Letzte 10 Aktionen`.
+- Die letzten 10 Aktionen werden mit Zeitstempel untereinander angezeigt.
+- Die Kreisübersicht zeigt jeden Kreis in einer eigenen Zeile.
+- Doppelte Bezeichnungen wie `Kreis 1 | Kreis 1` wurden entfernt.

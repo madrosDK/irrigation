@@ -66,7 +66,7 @@ class IrrigationZone extends IPSModule
         $this->RegisterVariableFloat('ComputedMoisture', 'Berechnete Feuchte', 'IRR.PercentFloat', 130);
         $this->RegisterVariableBoolean('ShouldWater', 'Automatik: Bewässern', '~Switch', 140);
         $this->RegisterVariableString('DecisionText', 'Entscheidung', '', 150);
-        $this->RegisterVariableString('LastAction', 'Letzte Aktion', '', 160);
+        $this->RegisterVariableString('LastAction', 'Letzte 10 Aktionen', '', 160);
 
         $this->RegisterTimer('StartActuator2Timer', 0, 'IRRZ_StartActuator2Delayed($_IPS[\'TARGET\']);');
         $this->RegisterTimer('StopActuator2Timer', 0, 'IRRZ_StopActuator2Delayed($_IPS[\'TARGET\']);');
@@ -823,8 +823,25 @@ class IrrigationZone extends IPSModule
 
     private function WriteLog(string $message): void
     {
-        $text = date('d.m.Y H:i:s') . ' - ' . $message;
-        $this->SetValue('LastAction', $text);
+        $line = date('d.m.Y H:i:s') . ' - ' . $message;
+
+        $old = $this->GetValue('LastAction');
+        $lines = [];
+
+        if (is_string($old) && trim($old) !== '') {
+            $lines = preg_split('/
+||
+/', trim($old));
+            if (!is_array($lines)) {
+                $lines = [];
+            }
+        }
+
+        array_unshift($lines, $line);
+        $lines = array_slice($lines, 0, 10);
+
+        $this->SetValue('LastAction', implode("
+", $lines));
         IPS_LogMessage('IRRZ[' . $this->InstanceID . ']', $message);
         $this->Debug('WriteLog', $message);
     }

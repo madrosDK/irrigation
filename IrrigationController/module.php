@@ -47,7 +47,7 @@ class IrrigationController extends IPSModule
         $this->RegisterVariableInteger('CurrentZone', 'Aktueller Kreis', '', 70);
         $this->RegisterVariableInteger('QueueCount', 'Wartende Kreise', '', 80);
         $this->RegisterVariableString('DecisionText', 'Sequenzstatus', '', 90);
-        $this->RegisterVariableString('LastAction', 'Letzte Aktion', '', 100);
+        $this->RegisterVariableString('LastAction', 'Letzte 10 Aktionen', '', 100);
         $this->RegisterVariableString('ZoneOverview', 'Kreisübersicht', '', 110);
 
         $this->RegisterTimer('StartCurrentZoneAfterPumpTimer', 0, 'IRR_StartCurrentZoneAfterPumpLead($_IPS[\'TARGET\']);');
@@ -248,16 +248,23 @@ class IrrigationController extends IPSModule
         $parts = [];
 
         foreach ($zones as $zoneID) {
-            $parts[] = '#' . $zoneID . ' | Kreis ' . @IRRZ_GetZoneNumber($zoneID) . ' | ' . @IPS_GetName($zoneID);
+            $number = @IRRZ_GetZoneNumber($zoneID);
+            $name = @IPS_GetName($zoneID);
+
+            // Keine doppelte Ausgabe wie "Kreis 1 | Kreis 1".
+            // Wenn der Name bereits der Standardname ist, nur einmal anzeigen.
+            $standardName = 'Kreis ' . $number;
+            if ($name === $standardName || $name === '') {
+                $parts[] = 'Kreis ' . $number . ' (#' . $zoneID . ')';
+            } else {
+                $parts[] = 'Kreis ' . $number . ' - ' . $name . ' (#' . $zoneID . ')';
+            }
         }
 
         $this->SetValue('ZoneOverview', count($parts) > 0 ? implode("
 ", $parts) : 'Keine Kreise unter dieser Master-Instanz gefunden');
         $this->SetValue('QueueCount', count($this->GetQueue()));
 
-        // Wichtig:
-        // Der Button "Kreise aktualisieren" muss auch den Instanzstatus neu berechnen.
-        // Sonst bleibt der Master auf Fehler, bis ApplyChanges durch irgendeine Formularänderung ausgelöst wird.
         $this->UpdateWeekplanVisibility();
         $this->UpdateStatus();
 
@@ -820,8 +827,25 @@ class IrrigationController extends IPSModule
 
     private function WriteLog(string $message): void
     {
-        $text = date('d.m.Y H:i:s') . ' - ' . $message;
-        $this->SetValue('LastAction', $text);
+        $line = date('d.m.Y H:i:s') . ' - ' . $message;
+
+        $old = $this->GetValue('LastAction');
+        $lines = [];
+
+        if (is_string($old) && trim($old) !== '') {
+            $lines = preg_split('/
+||
+/', trim($old));
+            if (!is_array($lines)) {
+                $lines = [];
+            }
+        }
+
+        array_unshift($lines, $line);
+        $lines = array_slice($lines, 0, 10);
+
+        $this->SetValue('LastAction', implode("
+", $lines));
         $this->SetValue('DecisionText', $message);
         IPS_LogMessage('IRR[' . $this->InstanceID . ']', $message);
         $this->Debug('WriteLog', $message);
