@@ -194,3 +194,14 @@ Wenn Aktor 1 und Aktor 2 gemeinsam konfiguriert waren, blockierte offenbar der e
 - `Letzte 10 Aktionen` nutzt jetzt `<br>` statt `\n`.
 - `Kreisübersicht` nutzt jetzt `<br>` statt `\n`.
 - Dadurch werden die Einträge im IP-Symcon WebFront wirklich untereinander angezeigt.
+
+
+## Fix V3.19 – Verlauf wirklich repariert
+
+Der Verlauf wird nicht mehr aus der sichtbaren String-Variable zurückgelesen.
+
+Neu:
+- Die letzten 10 Aktionen werden intern im Buffer `ActionHistory` als Array gespeichert.
+- Die Anzeige wird daraus jedes Mal neu mit `<br>` erzeugt.
+- Dadurch können Einträge nicht mehr ohne Trennzeichen zusammenkleben.
+- Die Kreisübersicht verwendet ebenfalls `<br>`.
