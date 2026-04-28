@@ -228,3 +228,13 @@ Wenn Aktor 1 und Aktor 2 gemeinsam konfiguriert waren, blockierte offenbar der e
 - Wenn der Master eine Sequenz fährt, übergibt er `FromMaster = true`; dadurch bleibt die Pumpensteuerung beim Master und wird nicht zwischen Kreisen abgeschaltet.
 - Die problematische Timer-Logik für Aktor 2 wurde entfernt.
 - Aktor 2 wird wieder direkt nach einer einstellbaren Pause mit derselben Logik wie Aktor 1 geschaltet.
+
+
+## Fix V3.29 – Pumpe vor Aktoren aus + Aktor-2-Kandidaten
+
+- Beim manuellen Stop eines Kreises:
+  1. Pumpe im Master aus
+  2. Wartezeit aus `Pumpe früher aus`
+  3. erst danach Aktor 1 und Aktor 2 aus
+- Beim Schalten eines Aktors werden jetzt mehrere passende Bool-Schaltvariablen versucht, nicht nur der erste Kandidat.
+- Das soll vor allem bei Aktor 2 helfen, wenn Shelly/xComfort mehrere Bool-Variablen unter einer Instanz hat.

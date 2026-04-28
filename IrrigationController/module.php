@@ -318,6 +318,11 @@ class IrrigationController extends IPSModule
         ]);
     }
 
+    public function GetPumpEarlyOffSeconds(): int
+    {
+        return max(0, $this->ReadPropertyInteger('PumpEarlyOffSeconds'));
+    }
+
     public function StartPumpFromZone(): void
     {
         $this->Debug('StartPumpFromZone', 'Pumpe EIN durch manuellen Kreisstart');

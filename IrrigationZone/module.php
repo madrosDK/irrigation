@@ -325,6 +325,22 @@ class IrrigationZone extends IPSModule
             'DelayBetweenActuatorsMs' => $delayMs
         ]);
 
+        // Manueller Kreisstop:
+        // Pumpe zuerst AUS, dann um "Pumpe früher aus" warten,
+        // erst danach die Aktoren schließen. Dadurch kann Druck abgebaut werden.
+        if (!$FromMaster) {
+            $earlyOffSeconds = $this->GetMasterPumpEarlyOffSeconds();
+            $this->Debug('StopZone.ManualPumpEarlyOff', [
+                'EarlyOffSeconds' => $earlyOffSeconds
+            ]);
+
+            $this->SetMasterPumpState(false);
+
+            if ($earlyOffSeconds > 0) {
+                IPS_Sleep($earlyOffSeconds * 1000);
+            }
+        }
+
         if ($this->HasActuatorConfigured(1)) {
             $this->SetZoneActuatorState(1, false);
         }
@@ -342,36 +358,7 @@ class IrrigationZone extends IPSModule
         $this->SetValue('Actuator2Active', false);
         $this->SetValue('ZoneActive', false);
 
-        if (!$FromMaster) {
-            $this->SetMasterPumpState(false);
-        }
-
         $this->WriteLog('Kreis ' . $this->ReadPropertyInteger('ZoneNumber') . ' gestoppt');
-    }
-
-    private function SetMasterPumpState(bool $state): void
-    {
-        $parentID = @IPS_GetParent($this->InstanceID);
-
-        $this->Debug('SetMasterPumpState', [
-            'ParentID' => $parentID,
-            'State' => $state
-        ]);
-
-        if ($parentID <= 0 || !@IPS_InstanceExists($parentID)) {
-            $this->Debug('SetMasterPumpState', 'kein gültiger Master als Parent gefunden');
-            return;
-        }
-
-        try {
-            if ($state) {
-                @IRR_StartPumpFromZone($parentID);
-            } else {
-                @IRR_StopPumpFromZone($parentID);
-            }
-        } catch (Throwable $e) {
-            $this->Debug('SetMasterPumpState.Exception', $e->getMessage());
-        }
     }
 
     public function IsEnabled(): bool
@@ -548,56 +535,57 @@ class IrrigationZone extends IPSModule
             return false;
         }
 
-        $switchVariableID = $this->FindSwitchVariable($targetID);
-        if ($switchVariableID <= 0) {
+        $candidates = $this->FindSwitchVariableCandidates($targetID);
+        if (count($candidates) === 0) {
             $this->Debug('SetActuatorState', 'keine geeignete schaltbare Bool-Variable gefunden');
             return false;
         }
 
-        $this->Debug('SetActuatorState.RequestAction.Start', [
-            'SwitchVariableID' => $switchVariableID,
-            'SwitchVariableName' => @IPS_GetName($switchVariableID),
-            'State' => $state
-        ]);
-
-        try {
-            RequestAction($switchVariableID, $state);
-            $this->Debug('SetActuatorState.RequestAction.Success', [
+        // Wichtig für Aktor 2:
+        // Nicht nur den ersten Kandidaten versuchen. Falls xComfort/Shelly eine
+        // Bool-Variable mit Action hat, aber diese nicht reagiert, probieren wir
+        // den nächsten Kandidaten.
+        foreach ($candidates as $switchVariableID) {
+            $this->Debug('SetActuatorState.RequestAction.Start', [
                 'SwitchVariableID' => $switchVariableID,
+                'SwitchVariableName' => @IPS_GetName($switchVariableID),
                 'State' => $state
             ]);
-            return true;
-        } catch (Throwable $e) {
-            $this->Debug('SetActuatorState.RequestAction.Exception', [
-                'SwitchVariableID' => $switchVariableID,
-                'Error' => $e->getMessage()
-            ]);
-            return false;
+
+            try {
+                RequestAction($switchVariableID, $state);
+                $this->Debug('SetActuatorState.RequestAction.Success', [
+                    'SwitchVariableID' => $switchVariableID,
+                    'State' => $state
+                ]);
+                return true;
+            } catch (Throwable $e) {
+                $this->Debug('SetActuatorState.RequestAction.Exception', [
+                    'SwitchVariableID' => $switchVariableID,
+                    'Error' => $e->getMessage()
+                ]);
+            }
         }
+
+        $this->Debug('SetActuatorState', 'kein Kandidat konnte per RequestAction geschaltet werden');
+        return false;
     }
 
-    private function FindSwitchVariable(int $targetID): int
+    private function FindSwitchVariableCandidates(int $targetID): array
     {
         if (@IPS_VariableExists($targetID)) {
             $var = IPS_GetVariable($targetID);
             if ($var['VariableType'] === VARIABLETYPE_BOOLEAN) {
-                $this->Debug('FindSwitchVariable.DirectVariable', [
-                    'VariableID' => $targetID,
-                    'Name' => @IPS_GetName($targetID),
-                    'ActionID' => $var['VariableAction']
-                ]);
-                return $targetID;
+                return [$targetID];
             }
         }
 
         if (!@IPS_InstanceExists($targetID)) {
-            $this->Debug('FindSwitchVariable', 'Target ist keine Instanz');
-            return 0;
+            return [];
         }
 
         $idsToCheck = IPS_GetChildrenIDs($targetID);
 
-        // Einige Module legen die eigentliche Schaltvariable eine Ebene tiefer ab.
         foreach (IPS_GetChildrenIDs($targetID) as $childID) {
             foreach (@IPS_GetChildrenIDs($childID) ?: [] as $grandChildID) {
                 $idsToCheck[] = $grandChildID;
@@ -641,32 +629,21 @@ class IrrigationZone extends IPSModule
             }
 
             if ($isBad) {
-                $debugCandidates[] = [
-                    'ID' => $childID,
-                    'Name' => $nameRaw,
-                    'Ident' => $identRaw,
-                    'Profile' => $profileRaw,
-                    'ActionID' => $var['VariableAction'],
-                    'Skipped' => 'bad keyword'
-                ];
                 continue;
             }
 
             $score = 0;
 
-            // Nur eine Variable mit VariableAction ist für echte Aktoren zuverlässig.
             if ($var['VariableAction'] > 0) {
                 $score += 1000;
             } else {
                 $score -= 1000;
             }
 
-            // Standard-Schalterprofile bevorzugen
             if (str_contains($profile, 'switch') || str_contains($profile, 'boolean') || str_contains($profile, '~switch')) {
                 $score += 200;
             }
 
-            // Typische Shelly-/xComfort-Schaltvariablen
             $veryGood = [
                 'state', 'status', 'switch', 'relay', 'output', 'power',
                 'ausgang', 'schalter', 'switchstate', 'onoff', 'on_off'
@@ -685,7 +662,10 @@ class IrrigationZone extends IPSModule
                 }
             }
 
-            $candidates[$childID] = $score;
+            if ($score >= 0) {
+                $candidates[$childID] = $score;
+            }
+
             $debugCandidates[] = [
                 'ID' => $childID,
                 'Name' => $nameRaw,
@@ -696,39 +676,26 @@ class IrrigationZone extends IPSModule
             ];
         }
 
-        $this->Debug('FindSwitchVariable.Candidates', [
+        arsort($candidates);
+
+        $this->Debug('FindSwitchVariableCandidates', [
             'TargetID' => $targetID,
             'TargetName' => @IPS_GetName($targetID),
-            'Candidates' => $debugCandidates
+            'Candidates' => $debugCandidates,
+            'SortedIDs' => array_keys($candidates)
         ]);
 
+        return array_map('intval', array_keys($candidates));
+    }
+
+    private function FindSwitchVariable(int $targetID): int
+    {
+        $candidates = $this->FindSwitchVariableCandidates($targetID);
         if (count($candidates) === 0) {
             return 0;
         }
 
-        arsort($candidates);
-        $selected = (int) array_key_first($candidates);
-
-        // Keine Variable ohne brauchbaren Score verwenden.
-        if ($candidates[$selected] < 0) {
-            $this->Debug('FindSwitchVariable.Selected', [
-                'VariableID' => $selected,
-                'Score' => $candidates[$selected],
-                'Result' => 'verworfen, Score negativ'
-            ]);
-            return 0;
-        }
-
-        $this->Debug('FindSwitchVariable.Selected', [
-            'VariableID' => $selected,
-            'Name' => IPS_GetName($selected),
-            'Ident' => IPS_GetObject($selected)['ObjectIdent'],
-            'Profile' => IPS_GetVariable($selected)['VariableCustomProfile'] !== '' ? IPS_GetVariable($selected)['VariableCustomProfile'] : IPS_GetVariable($selected)['VariableProfile'],
-            'ActionID' => IPS_GetVariable($selected)['VariableAction'],
-            'Score' => $candidates[$selected]
-        ]);
-
-        return $selected;
+        return $candidates[0];
     }
 
     private function RegisterSourceMessages(): void
