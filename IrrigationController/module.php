@@ -829,21 +829,25 @@ class IrrigationController extends IPSModule
     {
         $line = date('d.m.Y H:i:s') . ' - ' . $message;
 
-        $history = json_decode($this->GetBuffer('ActionHistory'), true);
-        if (!is_array($history)) {
-            $history = [];
+        $old = $this->GetValue('LastAction');
+        $lines = [];
+
+        if (is_string($old) && trim($old) !== '') {
+            $lines = preg_split('/
+|
+|
+/', trim($old));
+            if (!is_array($lines)) {
+                $lines = [];
+            }
         }
 
-        array_unshift($history, $line);
-        $history = array_slice($history, 0, 10);
+        array_unshift($lines, $line);
+        $lines = array_slice($lines, 0, 10);
 
-        $this->SetBuffer('ActionHistory', json_encode($history, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-
-        // WebFront benötigt <br>, nicht 
-.
-        $this->SetValue('LastAction', implode('<br>', $history));
+        $this->SetValue('LastAction', implode("
+", $lines));
         $this->SetValue('DecisionText', $message);
-
         IPS_LogMessage('IRR[' . $this->InstanceID . ']', $message);
         $this->Debug('WriteLog', $message);
     }

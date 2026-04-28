@@ -196,12 +196,12 @@ Wenn Aktor 1 und Aktor 2 gemeinsam konfiguriert waren, blockierte offenbar der e
 - Dadurch werden die Einträge im IP-Symcon WebFront wirklich untereinander angezeigt.
 
 
-## Fix V3.19 – Verlauf wirklich repariert
+## Rollback V3.20
 
-Der Verlauf wird nicht mehr aus der sichtbaren String-Variable zurückgelesen.
+Diese Version setzt den fehlerhaften Umbau mit `ActionHistory` wieder zurück.
+Basis ist der Stand vor V3.18/V3.19.
 
-Neu:
-- Die letzten 10 Aktionen werden intern im Buffer `ActionHistory` als Array gespeichert.
-- Die Anzeige wird daraus jedes Mal neu mit `<br>` erzeugt.
-- Dadurch können Einträge nicht mehr ohne Trennzeichen zusammenkleben.
-- Die Kreisübersicht verwendet ebenfalls `<br>`.
+Hinweis:
+- Falls nach V3.19 bereits Instanzen beschädigt sind, Moduldateien mit dieser Version ersetzen.
+- Danach in IP-Symcon Module neu laden.
+- Anschließend bei Master und Kreisen einmal `Änderungen übernehmen`.
