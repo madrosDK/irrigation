@@ -47,7 +47,7 @@ class IrrigationController extends IPSModule
         $this->RegisterVariableInteger('CurrentZone', 'Aktueller Kreis', '', 70);
         $this->RegisterVariableInteger('QueueCount', 'Wartende Kreise', '', 80);
         $this->RegisterVariableString('DecisionText', 'Sequenzstatus', '', 90);
-        $this->RegisterVariableString('LastAction', 'Letzte Aktion', '', 100);
+        $this->RegisterVariableString('LastAction', 'Letzte 10 Aktionen', '', 100);
         $this->RegisterVariableString('ZoneOverview', 'Kreisübersicht', '', 110);
 
         $this->RegisterTimer('StartCurrentZoneAfterPumpTimer', 0, 'IRR_StartCurrentZoneAfterPumpLead($_IPS[\'TARGET\']);');
@@ -204,6 +204,8 @@ class IrrigationController extends IPSModule
 
     public function CreateZone(): void
     {
+        $this->Debug('CreateZone', 'gestartet');
+
         $zones = $this->GetZones();
         $maxZones = max(1, min(10, $this->ReadPropertyInteger('MaxZones')));
 
@@ -214,7 +216,10 @@ class IrrigationController extends IPSModule
 
         $used = [];
         foreach ($zones as $zoneID) {
-            $used[] = @IRRZ_GetZoneNumber($zoneID);
+            $zoneNumber = @IRRZ_GetZoneNumber($zoneID);
+            if (is_int($zoneNumber)) {
+                $used[] = $zoneNumber;
+            }
         }
 
         $number = 1;
@@ -227,11 +232,48 @@ class IrrigationController extends IPSModule
             return;
         }
 
-        $zoneID = IPS_CreateInstance(self::MODULE_ID_ZONE);
-        IPS_SetParent($zoneID, $this->InstanceID);
-        IPS_SetName($zoneID, 'Kreis ' . $number);
-        IPS_SetProperty($zoneID, 'ZoneNumber', $number);
-        IPS_ApplyChanges($zoneID);
+        try {
+            $zoneID = IPS_CreateInstance(self::MODULE_ID_ZONE);
+        } catch (Throwable $e) {
+            $this->WriteLog('Kreis konnte nicht angelegt werden: ' . $e->getMessage());
+            $this->Debug('CreateZone.Exception', $e->getMessage());
+            return;
+        }
+
+        if (!is_int($zoneID) || $zoneID <= 0 || !@IPS_InstanceExists($zoneID)) {
+            $this->WriteLog('Kreis konnte nicht angelegt werden. Ungültige Instanz-ID: ' . (string) $zoneID);
+            $this->Debug('CreateZone.InvalidID', $zoneID);
+            return;
+        }
+
+        try {
+            IPS_SetParent($zoneID, $this->InstanceID);
+            IPS_SetName($zoneID, 'Kreis ' . $number);
+            IPS_SetProperty($zoneID, 'ZoneNumber', $number);
+            IPS_ApplyChanges($zoneID);
+        } catch (Throwable $e) {
+            $this->WriteLog('Kreis wurde erstellt, konnte aber nicht konfiguriert werden: ' . $e->getMessage());
+            $this->Debug('CreateZone.ConfigureException', [
+                'ZoneID' => $zoneID,
+                'Error' => $e->getMessage()
+            ]);
+
+            // Falls Symcon die defekte Zone auf Root angelegt hat, nicht stehen lassen.
+            if (@IPS_ObjectExists($zoneID)) {
+                @IPS_DeleteInstance($zoneID);
+            }
+            return;
+        }
+
+        if (@IPS_GetParent($zoneID) !== $this->InstanceID) {
+            $this->WriteLog('Kreis wurde angelegt, liegt aber nicht unter der Master-Instanz. Zone-ID: ' . $zoneID);
+            $this->Debug('CreateZone.ParentMismatch', [
+                'ZoneID' => $zoneID,
+                'ExpectedParent' => $this->InstanceID,
+                'ActualParent' => @IPS_GetParent($zoneID)
+            ]);
+            return;
+        }
 
         $this->RefreshZones();
         $this->UpdateStatus();
@@ -248,16 +290,23 @@ class IrrigationController extends IPSModule
         $parts = [];
 
         foreach ($zones as $zoneID) {
-            $parts[] = '#' . $zoneID . ' | Kreis ' . @IRRZ_GetZoneNumber($zoneID) . ' | ' . @IPS_GetName($zoneID);
+            $number = @IRRZ_GetZoneNumber($zoneID);
+            $name = @IPS_GetName($zoneID);
+
+            // Keine doppelte Ausgabe wie "Kreis 1 | Kreis 1".
+            // Wenn der Name bereits der Standardname ist, nur einmal anzeigen.
+            $standardName = 'Kreis ' . $number;
+            if ($name === $standardName || $name === '') {
+                $parts[] = 'Kreis ' . $number . ' (#' . $zoneID . ')';
+            } else {
+                $parts[] = 'Kreis ' . $number . ' - ' . $name . ' (#' . $zoneID . ')';
+            }
         }
 
         $this->SetValue('ZoneOverview', count($parts) > 0 ? implode("
 ", $parts) : 'Keine Kreise unter dieser Master-Instanz gefunden');
         $this->SetValue('QueueCount', count($this->GetQueue()));
 
-        // Wichtig:
-        // Der Button "Kreise aktualisieren" muss auch den Instanzstatus neu berechnen.
-        // Sonst bleibt der Master auf Fehler, bis ApplyChanges durch irgendeine Formularänderung ausgelöst wird.
         $this->UpdateWeekplanVisibility();
         $this->UpdateStatus();
 
@@ -267,6 +316,23 @@ class IrrigationController extends IPSModule
             'HasPumpConfigured' => $this->HasPumpConfigured(),
             'Status' => IPS_GetInstance($this->InstanceID)['InstanceStatus']
         ]);
+    }
+
+    public function GetPumpEarlyOffSeconds(): int
+    {
+        return max(0, $this->ReadPropertyInteger('PumpEarlyOffSeconds'));
+    }
+
+    public function StartPumpFromZone(): void
+    {
+        $this->Debug('StartPumpFromZone', 'Pumpe EIN durch manuellen Kreisstart');
+        $this->SetPumpState(true);
+    }
+
+    public function StopPumpFromZone(): void
+    {
+        $this->Debug('StopPumpFromZone', 'Pumpe AUS durch manuellen Kreisstop');
+        $this->SetPumpState(false);
     }
 
     public function StartManualSequence(): void
@@ -294,9 +360,10 @@ class IrrigationController extends IPSModule
 
         $currentZoneID = (int) $this->GetBuffer('CurrentZoneID');
         if ($currentZoneID > 0 && @IPS_InstanceExists($currentZoneID)) {
-            @IRRZ_StopZone($currentZoneID);
+            @IRRZ_StopZone($currentZoneID, true);
         }
 
+        // Wichtig: Bei manuellem Sequenzstop Pumpe IMMER ausschalten.
         $this->SetPumpState(false);
 
         $this->SetBuffer('Queue', json_encode([]));
@@ -321,6 +388,7 @@ class IrrigationController extends IPSModule
             $this->Debug('StartNextZone', 'Queue leer');
             $this->SetBuffer('CurrentZoneID', '0');
             $this->SetPumpState(false);
+            $this->SetValue('PumpActive', false);
             $this->SetValue('SequenceActive', false);
             $this->SetValue('PumpActive', false);
             $this->SetValue('CurrentZone', 0);
@@ -376,7 +444,7 @@ class IrrigationController extends IPSModule
         }
 
         $this->WriteLog('Starte Kreis ' . @IRRZ_GetZoneNumber($zoneID) . ' für ' . $duration . ' Minute(n)');
-        @IRRZ_StartZone($zoneID);
+        @IRRZ_StartZone($zoneID, true);
 
         $queue = $this->GetQueue();
         $earlyOffSeconds = max(0, $this->ReadPropertyInteger('PumpEarlyOffSeconds'));
@@ -411,11 +479,27 @@ class IrrigationController extends IPSModule
 
         $currentZoneID = (int) $this->GetBuffer('CurrentZoneID');
         if ($currentZoneID > 0 && @IPS_InstanceExists($currentZoneID)) {
-            @IRRZ_StopZone($currentZoneID);
+            @IRRZ_StopZone($currentZoneID, true);
             $this->WriteLog('Kreis ' . @IRRZ_GetZoneNumber($currentZoneID) . ' beendet');
         }
 
         $this->SetBuffer('CurrentZoneID', '0');
+
+        $queue = $this->GetQueue();
+
+        // Wenn kein weiterer Kreis mehr wartet, Sequenz hier sauber beenden
+        // und Pumpe garantiert ausschalten.
+        if (count($queue) === 0) {
+            $this->Debug('FinishCurrentZone', 'Queue leer nach Kreisende -> Sequenz abschließen und Pumpe AUS');
+            $this->SetTimerInterval('StartNextZoneTimer', 0);
+            $this->SetPumpState(false);
+            $this->SetValue('PumpActive', false);
+            $this->SetValue('SequenceActive', false);
+            $this->SetValue('CurrentZone', 0);
+            $this->SetValue('QueueCount', 0);
+            $this->WriteLog('Sequenz abgeschlossen');
+            return;
+        }
 
         $pauseSeconds = max(0, $this->ReadPropertyInteger('PauseBetweenZonesSeconds'));
         $this->Debug('FinishCurrentZone.PauseSeconds', $pauseSeconds);
@@ -820,8 +904,26 @@ class IrrigationController extends IPSModule
 
     private function WriteLog(string $message): void
     {
-        $text = date('d.m.Y H:i:s') . ' - ' . $message;
-        $this->SetValue('LastAction', $text);
+        $line = date('d.m.Y H:i:s') . ' - ' . $message;
+
+        $old = $this->GetValue('LastAction');
+        $lines = [];
+
+        if (is_string($old) && trim($old) !== '') {
+            $lines = preg_split('/
+|
+|
+/', trim($old));
+            if (!is_array($lines)) {
+                $lines = [];
+            }
+        }
+
+        array_unshift($lines, $line);
+        $lines = array_slice($lines, 0, 10);
+
+        $this->SetValue('LastAction', implode("
+", $lines));
         $this->SetValue('DecisionText', $message);
         IPS_LogMessage('IRR[' . $this->InstanceID . ']', $message);
         $this->Debug('WriteLog', $message);
