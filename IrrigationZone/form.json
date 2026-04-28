@@ -76,8 +76,13 @@
           "caption": "Aktor 2 Instanz (Shelly oder xComfort, optional)"
         },
         {
+          "name": "DelayBetweenActuatorsMs",
+          "type": "NumberSpinner",
+          "caption": "Pause zwischen Aktor 1 und Aktor 2 (Millisekunden)"
+        },
+        {
           "type": "Label",
-          "caption": "Beide Aktoren sind optional. Das Modul sucht unter der Instanz automatisch die passende schaltbare Bool-Variable und schaltet diese mit RequestAction."
+          "caption": "Beide Aktoren sind optional. Das Modul sucht unter der Instanz automatisch die passende schaltbare Bool-Variable und schaltet diese mit RequestAction. Bei xComfort kann eine kurze Pause zwischen zwei Schaltbefehlen notwendig sein."
         }
       ]
     }

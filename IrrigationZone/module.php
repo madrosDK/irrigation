@@ -25,6 +25,7 @@ class IrrigationZone extends IPSModule
         $this->RegisterPropertyInteger('Actuator1Instance', 0);
         $this->RegisterPropertyInteger('Valve1Variable', 0);
         $this->RegisterPropertyInteger('Actuator2Instance', 0);
+        $this->RegisterPropertyInteger('DelayBetweenActuatorsMs', 500);
 
         // Kompatibilität zu älteren Versionen, nicht im Formular sichtbar
         $this->RegisterPropertyInteger('Actuator1Variable', 0);
@@ -271,17 +272,27 @@ class IrrigationZone extends IPSModule
 
     public function StartZone(): void
     {
+        $delayMs = max(0, $this->ReadPropertyInteger('DelayBetweenActuatorsMs'));
+
         $this->Debug('StartZone', [
             'Step' => 'gestartet',
             'Actuator1Configured' => $this->HasActuatorConfigured(1),
             'Actuator2Configured' => $this->HasActuatorConfigured(2),
             'Actuator1Instance' => $this->ReadPropertyInteger('Actuator1Instance'),
-            'Actuator2Instance' => $this->ReadPropertyInteger('Actuator2Instance')
+            'Actuator2Instance' => $this->ReadPropertyInteger('Actuator2Instance'),
+            'DelayBetweenActuatorsMs' => $delayMs
         ]);
 
-        // Aktor 1 und Aktor 2 werden immer gemeinsam geschaltet.
-        // Aktor 2 ist optional, wird aber immer zusätzlich geschaltet, sobald er konfiguriert ist.
+        // Aktor 1 und Aktor 2 werden beide geschaltet.
+        // Für xComfort ist eine kurze Pause wichtig, weil sonst der zweite Befehl
+        // je nach Gateway/Kommunikation in einen Timeout laufen kann.
         $actuator1Switched = $this->SetZoneActuatorState(1, true);
+
+        if ($this->HasActuatorConfigured(2) && $delayMs > 0) {
+            $this->Debug('StartZone.DelayBeforeActuator2', $delayMs);
+            IPS_Sleep($delayMs);
+        }
+
         $actuator2Switched = $this->SetZoneActuatorState(2, true);
 
         $this->SetValue('Actuator1Active', $actuator1Switched);
@@ -293,16 +304,25 @@ class IrrigationZone extends IPSModule
 
     public function StopZone(): void
     {
+        $delayMs = max(0, $this->ReadPropertyInteger('DelayBetweenActuatorsMs'));
+
         $this->Debug('StopZone', [
             'Step' => 'gestartet',
             'Actuator1Configured' => $this->HasActuatorConfigured(1),
             'Actuator2Configured' => $this->HasActuatorConfigured(2),
             'Actuator1Instance' => $this->ReadPropertyInteger('Actuator1Instance'),
-            'Actuator2Instance' => $this->ReadPropertyInteger('Actuator2Instance')
+            'Actuator2Instance' => $this->ReadPropertyInteger('Actuator2Instance'),
+            'DelayBetweenActuatorsMs' => $delayMs
         ]);
 
-        // Aktor 1 und Aktor 2 werden immer gemeinsam ausgeschaltet.
+        // Beim Ausschalten ebenfalls beide Aktoren behandeln.
         $this->SetZoneActuatorState(1, false);
+
+        if ($this->HasActuatorConfigured(2) && $delayMs > 0) {
+            $this->Debug('StopZone.DelayBeforeActuator2', $delayMs);
+            IPS_Sleep($delayMs);
+        }
+
         $this->SetZoneActuatorState(2, false);
 
         $this->SetValue('Actuator1Active', false);
@@ -533,11 +553,19 @@ class IrrigationZone extends IPSModule
             return 0;
         }
 
-        $children = IPS_GetChildrenIDs($targetID);
+        $idsToCheck = IPS_GetChildrenIDs($targetID);
+
+        // Einige Module legen die eigentliche Schaltvariable eine Ebene tiefer ab.
+        foreach (IPS_GetChildrenIDs($targetID) as $childID) {
+            foreach (@IPS_GetChildrenIDs($childID) ?: [] as $grandChildID) {
+                $idsToCheck[] = $grandChildID;
+            }
+        }
+
         $candidates = [];
         $debugCandidates = [];
 
-        foreach ($children as $childID) {
+        foreach (array_unique($idsToCheck) as $childID) {
             if (!@IPS_VariableExists($childID)) {
                 continue;
             }
@@ -550,18 +578,21 @@ class IrrigationZone extends IPSModule
             $object = IPS_GetObject($childID);
             $nameRaw = IPS_GetName($childID);
             $identRaw = $object['ObjectIdent'];
+            $profileRaw = $var['VariableCustomProfile'] !== '' ? $var['VariableCustomProfile'] : $var['VariableProfile'];
+
             $name = strtolower($nameRaw);
             $ident = strtolower($identRaw);
+            $profile = strtolower($profileRaw);
 
             $bad = [
                 'online', 'connected', 'reachable', 'update', 'firmware', 'battery',
                 'lowbat', 'error', 'overtemperature', 'rssi', 'cloud', 'overload',
-                'schutz', 'alarm', 'warning', 'warnung'
+                'schutz', 'alarm', 'warning', 'warnung', 'motion', 'kontakt', 'contact'
             ];
 
             $isBad = false;
             foreach ($bad as $word) {
-                if (str_contains($name, $word) || str_contains($ident, $word)) {
+                if (str_contains($name, $word) || str_contains($ident, $word) || str_contains($profile, $word)) {
                     $isBad = true;
                     break;
                 }
@@ -572,6 +603,7 @@ class IrrigationZone extends IPSModule
                     'ID' => $childID,
                     'Name' => $nameRaw,
                     'Ident' => $identRaw,
+                    'Profile' => $profileRaw,
                     'ActionID' => $var['VariableAction'],
                     'Skipped' => 'bad keyword'
                 ];
@@ -580,31 +612,35 @@ class IrrigationZone extends IPSModule
 
             $score = 0;
 
-            // Am wichtigsten: eine echte Aktionsvariable
+            // Nur eine Variable mit VariableAction ist für echte Aktoren zuverlässig.
             if ($var['VariableAction'] > 0) {
                 $score += 1000;
+            } else {
+                $score -= 1000;
             }
 
-            // Sehr typische Shelly-/xComfort-Schaltvariablen
-            $veryGood = ['state', 'status', 'switch', 'relay', 'output', 'power', 'ausgang', 'schalter'];
+            // Standard-Schalterprofile bevorzugen
+            if (str_contains($profile, 'switch') || str_contains($profile, 'boolean') || str_contains($profile, '~switch')) {
+                $score += 200;
+            }
+
+            // Typische Shelly-/xComfort-Schaltvariablen
+            $veryGood = [
+                'state', 'status', 'switch', 'relay', 'output', 'power',
+                'ausgang', 'schalter', 'switchstate', 'onoff', 'on_off'
+            ];
+
             foreach ($veryGood as $word) {
                 if ($name === $word || $ident === $word || str_contains($name, $word) || str_contains($ident, $word)) {
                     $score += 100;
                 }
             }
 
-            // Weitere plausible Begriffe
-            $good = ['valve', 'pump', 'kanal', 'aktor', 'schalten', 'onoff', 'on_off'];
+            $good = ['valve', 'pump', 'kanal', 'aktor', 'schalten'];
             foreach ($good as $word) {
                 if (str_contains($name, $word) || str_contains($ident, $word)) {
                     $score += 20;
                 }
-            }
-
-            // Wenn keine Aktion hinterlegt ist, stark abwerten:
-            // Reine Status-/Diagnosevariablen können sonst fälschlich gewählt werden.
-            if ($var['VariableAction'] <= 0) {
-                $score -= 500;
             }
 
             $candidates[$childID] = $score;
@@ -612,6 +648,7 @@ class IrrigationZone extends IPSModule
                 'ID' => $childID,
                 'Name' => $nameRaw,
                 'Ident' => $identRaw,
+                'Profile' => $profileRaw,
                 'ActionID' => $var['VariableAction'],
                 'Score' => $score
             ];
@@ -630,7 +667,7 @@ class IrrigationZone extends IPSModule
         arsort($candidates);
         $selected = (int) array_key_first($candidates);
 
-        // Keine offensichtlich unbrauchbare Variable wählen.
+        // Keine Variable ohne brauchbaren Score verwenden.
         if ($candidates[$selected] < 0) {
             $this->Debug('FindSwitchVariable.Selected', [
                 'VariableID' => $selected,
@@ -644,6 +681,7 @@ class IrrigationZone extends IPSModule
             'VariableID' => $selected,
             'Name' => IPS_GetName($selected),
             'Ident' => IPS_GetObject($selected)['ObjectIdent'],
+            'Profile' => IPS_GetVariable($selected)['VariableCustomProfile'] !== '' ? IPS_GetVariable($selected)['VariableCustomProfile'] : IPS_GetVariable($selected)['VariableProfile'],
             'ActionID' => IPS_GetVariable($selected)['VariableAction'],
             'Score' => $candidates[$selected]
         ]);

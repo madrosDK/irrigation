@@ -157,3 +157,13 @@ Zusätzlich wurde die Wochenplan-Aktion vereinfacht:
 - Die Auswahl bevorzugt Variablen mit `VariableAction`.
 - Diagnosevariablen wie Online, Connected, Error, Battery usw. werden verworfen.
 - Debug zeigt für Aktor 2 dieselbe Auswertung wie für Aktor 1.
+
+
+## Fix V3.14 – Timeout bei Aktor 2
+
+- Aktor 2 nutzt weiterhin dieselbe Logik wie Aktor 1.
+- Neu: einstellbare Pause zwischen Aktor 1 und Aktor 2 in Millisekunden.
+- Standard: 500 ms.
+- Das hilft vor allem bei xComfort-Gateways, die zwei direkte Schaltbefehle hintereinander nicht sauber verarbeiten.
+- Die Suche nach der Schaltvariable prüft jetzt auch eine Ebene unterhalb der Aktor-Instanz.
+- Variablen ohne `VariableAction` werden stark abgewertet.
