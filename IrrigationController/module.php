@@ -241,15 +241,39 @@ class IrrigationController extends IPSModule
         }
 
         if (!is_int($zoneID) || $zoneID <= 0 || !@IPS_InstanceExists($zoneID)) {
-            $this->WriteLog('Kreis konnte nicht angelegt werden. Ungültige Instanz-ID: ' . (string)$zoneID);
+            $this->WriteLog('Kreis konnte nicht angelegt werden. Ungültige Instanz-ID: ' . (string) $zoneID);
             $this->Debug('CreateZone.InvalidID', $zoneID);
             return;
         }
 
-        IPS_SetParent($zoneID, $this->InstanceID);
-        IPS_SetName($zoneID, 'Kreis ' . $number);
-        IPS_SetProperty($zoneID, 'ZoneNumber', $number);
-        IPS_ApplyChanges($zoneID);
+        try {
+            IPS_SetParent($zoneID, $this->InstanceID);
+            IPS_SetName($zoneID, 'Kreis ' . $number);
+            IPS_SetProperty($zoneID, 'ZoneNumber', $number);
+            IPS_ApplyChanges($zoneID);
+        } catch (Throwable $e) {
+            $this->WriteLog('Kreis wurde erstellt, konnte aber nicht konfiguriert werden: ' . $e->getMessage());
+            $this->Debug('CreateZone.ConfigureException', [
+                'ZoneID' => $zoneID,
+                'Error' => $e->getMessage()
+            ]);
+
+            // Falls Symcon die defekte Zone auf Root angelegt hat, nicht stehen lassen.
+            if (@IPS_ObjectExists($zoneID)) {
+                @IPS_DeleteInstance($zoneID);
+            }
+            return;
+        }
+
+        if (@IPS_GetParent($zoneID) !== $this->InstanceID) {
+            $this->WriteLog('Kreis wurde angelegt, liegt aber nicht unter der Master-Instanz. Zone-ID: ' . $zoneID);
+            $this->Debug('CreateZone.ParentMismatch', [
+                'ZoneID' => $zoneID,
+                'ExpectedParent' => $this->InstanceID,
+                'ActualParent' => @IPS_GetParent($zoneID)
+            ]);
+            return;
+        }
 
         $this->RefreshZones();
         $this->UpdateStatus();

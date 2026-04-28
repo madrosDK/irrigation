@@ -68,8 +68,7 @@ class IrrigationZone extends IPSModule
         $this->RegisterVariableString('DecisionText', 'Entscheidung', '', 150);
         $this->RegisterVariableString('LastAction', 'Letzte 10 Aktionen', '', 160);
 
-        $this->RegisterTimerSafe('StartActuator2Timer', 0, 'IRRZ_StartActuator2Delayed($_IPS[\'TARGET\']);');
-        $this->RegisterTimerSafe('StopActuator2Timer', 0, 'IRRZ_StopActuator2Delayed($_IPS[\'TARGET\']);');
+        $this->EnsureActuatorTimers();
 
         $this->SetBuffer('RegisteredMessages', json_encode([]));
         $this->Debug('Create', 'Zone initialisiert');
@@ -773,8 +772,7 @@ class IrrigationZone extends IPSModule
             }
         }
 
-        $this->RegisterTimerSafe('StartActuator2Timer', 0, 'IRRZ_StartActuator2Delayed($_IPS[\'TARGET\']);');
-        $this->RegisterTimerSafe('StopActuator2Timer', 0, 'IRRZ_StopActuator2Delayed($_IPS[\'TARGET\']);');
+        $this->EnsureActuatorTimers();
 
         $this->SetBuffer('RegisteredMessages', json_encode([]));
     }
@@ -821,18 +819,29 @@ class IrrigationZone extends IPSModule
         }
     }
 
-    private function RegisterTimerSafe(string $Ident, int $Interval, string $Script): void
+    private function EnsureActuatorTimers(): void
+    {
+        $this->EnsureTimerEvent('StartActuator2Timer', 'IRRZ_StartActuator2Delayed($_IPS[\'TARGET\']);');
+        $this->EnsureTimerEvent('StopActuator2Timer', 'IRRZ_StopActuator2Delayed($_IPS[\'TARGET\']);');
+    }
+
+    private function EnsureTimerEvent(string $Ident, string $Script): void
     {
         $timerID = @IPS_GetObjectIDByIdent($Ident, $this->InstanceID);
+
         if ($timerID === false) {
-            $this->RegisterTimer($Ident, $Interval, $Script);
-            return;
+            $timerID = IPS_CreateEvent(1);
+            IPS_SetParent($timerID, $this->InstanceID);
+            IPS_SetIdent($timerID, $Ident);
+            IPS_SetName($timerID, $Ident);
+            IPS_SetHidden($timerID, true);
         }
 
         if (@IPS_EventExists($timerID)) {
-            @IPS_SetEventScript($timerID, $Script);
-            @IPS_SetEventCyclic($timerID, 0, 0, 0, 0, 1, 0);
-            $this->SetTimerInterval($Ident, $Interval);
+            IPS_SetEventActive($timerID, false);
+            IPS_SetEventScript($timerID, $Script);
+            // Sekunden-Timer; Intervall wird später über SetTimerInterval gesetzt.
+            IPS_SetEventCyclic($timerID, 0, 0, 0, 0, 1, 0);
         }
     }
 

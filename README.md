@@ -203,3 +203,11 @@ Wenn Aktor 1 und Aktor 2 gemeinsam konfiguriert waren, blockierte offenbar der e
 - Das verhindert den Fehler „Timer ... ist bereits vorhanden“.
 - Kreis-Anlage im Master prüft jetzt, ob `IPS_CreateInstance()` wirklich eine gültige Instanz-ID zurückgegeben hat.
 - Dadurch wird nicht mehr mit Instanz `#0` weitergearbeitet.
+
+
+## Fix V3.26 – Timer wirklich eindeutig
+
+- Die Timer `StartActuator2Timer` und `StopActuator2Timer` werden nicht mehr über `RegisterTimer()` registriert.
+- Stattdessen werden sie über `EnsureTimerEvent()` nur angelegt, wenn sie noch nicht existieren.
+- Damit wird der Fehler „Timer ... ist bereits vorhanden“ vermieden.
+- Wenn das Konfigurieren einer neuen Zone fehlschlägt, wird die defekte Root-Zone wieder gelöscht.
