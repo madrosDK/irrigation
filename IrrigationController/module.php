@@ -318,6 +318,18 @@ class IrrigationController extends IPSModule
         ]);
     }
 
+    public function StartPumpFromZone(): void
+    {
+        $this->Debug('StartPumpFromZone', 'Pumpe EIN durch manuellen Kreisstart');
+        $this->SetPumpState(true);
+    }
+
+    public function StopPumpFromZone(): void
+    {
+        $this->Debug('StopPumpFromZone', 'Pumpe AUS durch manuellen Kreisstop');
+        $this->SetPumpState(false);
+    }
+
     public function StartManualSequence(): void
     {
         $this->Debug('StartManualSequence', 'gestartet');
@@ -343,7 +355,7 @@ class IrrigationController extends IPSModule
 
         $currentZoneID = (int) $this->GetBuffer('CurrentZoneID');
         if ($currentZoneID > 0 && @IPS_InstanceExists($currentZoneID)) {
-            @IRRZ_StopZone($currentZoneID);
+            @IRRZ_StopZone($currentZoneID, true);
         }
 
         $this->SetPumpState(false);
@@ -425,7 +437,7 @@ class IrrigationController extends IPSModule
         }
 
         $this->WriteLog('Starte Kreis ' . @IRRZ_GetZoneNumber($zoneID) . ' für ' . $duration . ' Minute(n)');
-        @IRRZ_StartZone($zoneID);
+        @IRRZ_StartZone($zoneID, true);
 
         $queue = $this->GetQueue();
         $earlyOffSeconds = max(0, $this->ReadPropertyInteger('PumpEarlyOffSeconds'));
@@ -460,7 +472,7 @@ class IrrigationController extends IPSModule
 
         $currentZoneID = (int) $this->GetBuffer('CurrentZoneID');
         if ($currentZoneID > 0 && @IPS_InstanceExists($currentZoneID)) {
-            @IRRZ_StopZone($currentZoneID);
+            @IRRZ_StopZone($currentZoneID, true);
             $this->WriteLog('Kreis ' . @IRRZ_GetZoneNumber($currentZoneID) . ' beendet');
         }
 

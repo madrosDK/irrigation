@@ -219,3 +219,12 @@ Wenn Aktor 1 und Aktor 2 gemeinsam konfiguriert waren, blockierte offenbar der e
 - `SetTimerInterval()` benötigt Timer, die über `RegisterTimer()` registriert sind.
 - Beim Laden werden alte fehlerhafte Timer-Events mit gleicher Ident gelöscht und sauber neu registriert.
 - Dadurch funktionieren `StartActuator2Timer` und `StopActuator2Timer` wieder mit `SetTimerInterval()`.
+
+
+## Fix V3.28 – Manueller Kreisstart schaltet Pumpe + Aktor 2 direkt
+
+- Wenn ein Kreis direkt über `Kreis aktiv bewässert` gestartet wird, schaltet der Kreis jetzt die Pumpe im Master ein.
+- Beim direkten Stop des Kreises wird die Pumpe wieder ausgeschaltet.
+- Wenn der Master eine Sequenz fährt, übergibt er `FromMaster = true`; dadurch bleibt die Pumpensteuerung beim Master und wird nicht zwischen Kreisen abgeschaltet.
+- Die problematische Timer-Logik für Aktor 2 wurde entfernt.
+- Aktor 2 wird wieder direkt nach einer einstellbaren Pause mit derselben Logik wie Aktor 1 geschaltet.
