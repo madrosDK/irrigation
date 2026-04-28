@@ -245,3 +245,11 @@ Wenn Aktor 1 und Aktor 2 gemeinsam konfiguriert waren, blockierte offenbar der e
 - Fehlende Methode `SetMasterPumpState()` im Kreismodul ergänzt.
 - Fehlende Methode `GetMasterPumpEarlyOffSeconds()` im Kreismodul ergänzt.
 - Dadurch funktioniert der manuelle Kreisstart/Stop mit Pumpensteuerung wieder.
+
+
+## Fix V3.31 – Aktor 2 getrennt ausführen
+
+Wenn nur Aktor 2 konfiguriert ist, funktioniert er direkt.
+Wenn Aktor 1 und Aktor 2 gemeinsam konfiguriert sind, wird Aktor 2 jetzt getrennt per `IPS_RunScriptText()` nach der eingestellten Pause ausgeführt.
+
+Dadurch kann der RequestAction-Aufruf von Aktor 1 den zweiten Schaltbefehl nicht mehr blockieren.
