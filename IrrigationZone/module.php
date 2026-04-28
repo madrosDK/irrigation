@@ -66,7 +66,7 @@ class IrrigationZone extends IPSModule
         $this->RegisterVariableFloat('ComputedMoisture', 'Berechnete Feuchte', 'IRR.PercentFloat', 130);
         $this->RegisterVariableBoolean('ShouldWater', 'Automatik: Bewässern', '~Switch', 140);
         $this->RegisterVariableString('DecisionText', 'Entscheidung', '', 150);
-        $this->RegisterVariableString('LastAction', 'Letzte 10 Aktionen', '', 160);
+        $this->RegisterVariableString('LastAction', 'Letzte 10 Aktionen', '~HTMLBox', 160);
 
         $this->RegisterTimer('StartActuator2Timer', 0, 'IRRZ_StartActuator2Delayed($_IPS[\'TARGET\']);');
         $this->RegisterTimer('StopActuator2Timer', 0, 'IRRZ_StopActuator2Delayed($_IPS[\'TARGET\']);');
@@ -114,6 +114,8 @@ class IrrigationZone extends IPSModule
         $this->SetValue('DurationMinutes', $this->ReadPropertyInteger('Duration'));
         $this->SetValue('MoistureThresholdValue', $this->ReadPropertyInteger('MoistureThreshold'));
         $this->SetValue('MoistureModeValue', $this->ReadPropertyInteger('MoistureMode'));
+
+        $this->SetHtmlProfiles();
 
         $this->RegisterSourceMessages();
         $this->RefreshValues();
@@ -818,6 +820,14 @@ class IrrigationZone extends IPSModule
             IPS_CreateVariableProfile('IRRZ.MoistureMode', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileAssociation('IRRZ.MoistureMode', self::MOISTURE_LOWEST, 'Niedrigster Wert', '', 0xFFB300);
             IPS_SetVariableProfileAssociation('IRRZ.MoistureMode', self::MOISTURE_AVERAGE, 'Durchschnitt', '', 0x27AE60);
+        }
+    }
+
+    private function SetHtmlProfiles(): void
+    {
+        $lastActionID = @$this->GetIDForIdent('LastAction');
+        if ($lastActionID !== false && @IPS_VariableExists($lastActionID)) {
+            @IPS_SetVariableCustomProfile($lastActionID, '~HTMLBox');
         }
     }
 

@@ -217,3 +217,14 @@ Es wurden nur gezielt die Ausgaben geändert:
 - keine Klammerstruktur verändert
 
 Dadurch bleibt die Instanz ladbar.
+
+
+## Fix V3.23 – HTMLBox für echte Zeilenumbrüche
+
+`<br>` wird im WebFront nur als Zeilenumbruch gerendert, wenn die String-Variable als HTML angezeigt wird.
+
+Geändert:
+- `Letzte 10 Aktionen` im Master nutzt `~HTMLBox`
+- `Kreisübersicht` im Master nutzt `~HTMLBox`
+- `Letzte 10 Aktionen` im Kreis nutzt `~HTMLBox`
+- bestehende Variablen werden beim Übernehmen automatisch auf `~HTMLBox` gesetzt
