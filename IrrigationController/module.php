@@ -47,8 +47,8 @@ class IrrigationController extends IPSModule
         $this->RegisterVariableInteger('CurrentZone', 'Aktueller Kreis', '', 70);
         $this->RegisterVariableInteger('QueueCount', 'Wartende Kreise', '', 80);
         $this->RegisterVariableString('DecisionText', 'Sequenzstatus', '', 90);
-        $this->RegisterVariableString('LastAction', 'Letzte 10 Aktionen', '~HTMLBox', 100);
-        $this->RegisterVariableString('ZoneOverview', 'Kreisübersicht', '~HTMLBox', 110);
+        $this->RegisterVariableString('LastAction', 'Letzte 10 Aktionen', '', 100);
+        $this->RegisterVariableString('ZoneOverview', 'Kreisübersicht', '', 110);
 
         $this->RegisterTimer('StartCurrentZoneAfterPumpTimer', 0, 'IRR_StartCurrentZoneAfterPumpLead($_IPS[\'TARGET\']);');
         $this->RegisterTimer('StopPumpEarlyTimer', 0, 'IRR_StopPumpEarly($_IPS[\'TARGET\']);');
@@ -90,8 +90,6 @@ class IrrigationController extends IPSModule
         $this->SetValue('PumpLeadTimeSeconds', $this->ReadPropertyInteger('PumpLeadTimeSeconds'));
         $this->SetValue('PumpEarlyOffSeconds', $this->ReadPropertyInteger('PumpEarlyOffSeconds'));
         $this->SetValue('PauseBetweenZonesSeconds', $this->ReadPropertyInteger('PauseBetweenZonesSeconds'));
-
-        $this->SetHtmlProfiles();
 
         $this->MaintainWeekplan('ScheduleTimer', 'Zeitsteuerung');
         $this->MaintainWeekplan('ScheduleAuto', 'Automatik');
@@ -824,19 +822,6 @@ class IrrigationController extends IPSModule
             IPS_CreateVariableProfile('IRR.Seconds', VARIABLETYPE_INTEGER);
             IPS_SetVariableProfileValues('IRR.Seconds', 0, 3600, 1);
             IPS_SetVariableProfileText('IRR.Seconds', '', ' s');
-        }
-    }
-
-    private function SetHtmlProfiles(): void
-    {
-        $lastActionID = @$this->GetIDForIdent('LastAction');
-        if ($lastActionID !== false && @IPS_VariableExists($lastActionID)) {
-            @IPS_SetVariableCustomProfile($lastActionID, '~HTMLBox');
-        }
-
-        $zoneOverviewID = @$this->GetIDForIdent('ZoneOverview');
-        if ($zoneOverviewID !== false && @IPS_VariableExists($zoneOverviewID)) {
-            @IPS_SetVariableCustomProfile($zoneOverviewID, '~HTMLBox');
         }
     }
 
