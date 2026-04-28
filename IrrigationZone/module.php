@@ -826,18 +826,16 @@ class IrrigationZone extends IPSModule
         $line = date('d.m.Y H:i:s') . ' - ' . $message;
 
         $old = $this->GetValue('LastAction');
+        $lines = [];
 
-        if ($old != '') {
-            $new = $line . '<br>' . $old;
-        } else {
-            $new = $line;
-        }
-
-        $this->SetValue('LastAction', $new);
-
-        IPS_LogMessage('IRR[' . $this->InstanceID . ']', $message);
-        $this->Debug('WriteLog', $message);
-    }
+        if (is_string($old) && trim($old) !== '') {
+            $lines = preg_split('/
+|
+|
+/', trim($old));
+            if (!is_array($lines)) {
+                $lines = [];
+            }
         }
 
         array_unshift($lines, $line);

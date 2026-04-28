@@ -205,3 +205,15 @@ Hinweis:
 - Falls nach V3.19 bereits Instanzen beschädigt sind, Moduldateien mit dieser Version ersetzen.
 - Danach in IP-Symcon Module neu laden.
 - Anschließend bei Master und Kreisen einmal `Änderungen übernehmen`.
+
+
+## Fix V3.22 – sicherer Zeilenumbruch
+
+Diese Version basiert wieder auf der funktionierenden V3.20.
+
+Es wurden nur gezielt die Ausgaben geändert:
+- `implode("\n", ...)` zu `implode("<br>", ...)`
+- keine Funktionsblöcke umgebaut
+- keine Klammerstruktur verändert
+
+Dadurch bleibt die Instanz ladbar.
