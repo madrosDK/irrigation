@@ -135,3 +135,15 @@ Es ist nicht mehr nötig, erst eine Formulareigenschaft wie den Pumpenaktor zu �
 Zusätzlich wurde die Wochenplan-Aktion vereinfacht:
 - Zeitsteuerung Ein: `IRR_StartManualSequence(...)`
 - Automatik Ein: `IRR_StartAutomaticSequence(...)`
+
+
+## Fix V3.12 – Aktor 2 wird wirklich gemeinsam geschaltet
+
+- `StartZone()` schaltet Aktor 1 und Aktor 2 jetzt explizit nacheinander.
+- `StopZone()` schaltet Aktor 1 und Aktor 2 explizit nacheinander aus.
+- Die Statusvariablen `Aktor 1 aktiv` und `Aktor 2 aktiv` werden nur noch auf `true` gesetzt, wenn der Schaltbefehl erfolgreich abgesetzt wurde.
+- Debug zeigt jetzt pro Aktor:
+  - gewählte Instanz
+  - gefundene Bool-Schaltvariable
+  - Kandidaten unter Shelly/xComfort
+  - Erfolg oder Fehler von `RequestAction()`

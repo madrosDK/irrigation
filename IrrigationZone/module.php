@@ -271,22 +271,37 @@ class IrrigationZone extends IPSModule
 
     public function StartZone(): void
     {
-        $this->Debug('StartZone', 'gestartet');
+        $this->Debug('StartZone', [
+            'Step' => 'gestartet',
+            'Actuator1Configured' => $this->HasActuatorConfigured(1),
+            'Actuator2Configured' => $this->HasActuatorConfigured(2),
+            'Actuator1Instance' => $this->ReadPropertyInteger('Actuator1Instance'),
+            'Actuator2Instance' => $this->ReadPropertyInteger('Actuator2Instance')
+        ]);
 
-        $this->SetZoneActuatorState(1, true);
-        $this->SetZoneActuatorState(2, true);
+        // Aktor 1 und Aktor 2 werden immer gemeinsam geschaltet.
+        // Aktor 2 ist optional, wird aber immer zusätzlich geschaltet, sobald er konfiguriert ist.
+        $actuator1Switched = $this->SetZoneActuatorState(1, true);
+        $actuator2Switched = $this->SetZoneActuatorState(2, true);
 
-        $this->SetValue('Actuator1Active', $this->HasActuatorConfigured(1));
-        $this->SetValue('Actuator2Active', $this->HasActuatorConfigured(2));
-        $this->SetValue('ZoneActive', true);
+        $this->SetValue('Actuator1Active', $actuator1Switched);
+        $this->SetValue('Actuator2Active', $actuator2Switched);
+        $this->SetValue('ZoneActive', $actuator1Switched || $actuator2Switched);
 
         $this->WriteLog('Kreis ' . $this->ReadPropertyInteger('ZoneNumber') . ' gestartet');
     }
 
     public function StopZone(): void
     {
-        $this->Debug('StopZone', 'gestartet');
+        $this->Debug('StopZone', [
+            'Step' => 'gestartet',
+            'Actuator1Configured' => $this->HasActuatorConfigured(1),
+            'Actuator2Configured' => $this->HasActuatorConfigured(2),
+            'Actuator1Instance' => $this->ReadPropertyInteger('Actuator1Instance'),
+            'Actuator2Instance' => $this->ReadPropertyInteger('Actuator2Instance')
+        ]);
 
+        // Aktor 1 und Aktor 2 werden immer gemeinsam ausgeschaltet.
         $this->SetZoneActuatorState(1, false);
         $this->SetZoneActuatorState(2, false);
 
@@ -312,7 +327,7 @@ class IrrigationZone extends IPSModule
         return $this->ReadPropertyInteger('Duration');
     }
 
-    private function SetZoneActuatorState(int $number, bool $state): void
+    private function SetZoneActuatorState(int $number, bool $state): bool
     {
         if ($number === 1) {
             $instance = $this->ReadPropertyInteger('Actuator1Instance');
@@ -339,31 +354,27 @@ class IrrigationZone extends IPSModule
         ]);
 
         if ($instance > 0) {
-            $this->SetActuatorState($instance, $state);
-            return;
+            return $this->SetActuatorState($instance, $state);
         }
 
         if ($variableCompat > 0) {
-            $this->SetActuatorState($variableCompat, $state);
-            return;
+            return $this->SetActuatorState($variableCompat, $state);
         }
 
         if ($legacyInstance > 0) {
-            $this->SetActuatorState($legacyInstance, $state);
-            return;
+            return $this->SetActuatorState($legacyInstance, $state);
         }
 
         if ($legacyVariable > 0) {
-            $this->SetActuatorState($legacyVariable, $state);
-            return;
+            return $this->SetActuatorState($legacyVariable, $state);
         }
 
         if ($legacy > 0) {
-            $this->SetActuatorState($legacy, $state);
-            return;
+            return $this->SetActuatorState($legacy, $state);
         }
 
         $this->Debug('SetZoneActuatorState', 'kein Aktor für Nummer ' . $number . ' konfiguriert');
+        return false;
     }
 
     private function HasActuatorConfigured(int $number): bool
@@ -455,30 +466,40 @@ class IrrigationZone extends IPSModule
         return $name . ': ' . $formatted;
     }
 
-    private function SetActuatorState(int $targetID, bool $state): void
+    private function SetActuatorState(int $targetID, bool $state): bool
     {
         $this->Debug('SetActuatorState', ['TargetID' => $targetID, 'State' => $state]);
 
         if ($targetID <= 0 || !@IPS_ObjectExists($targetID)) {
             $this->Debug('SetActuatorState', 'Zielobjekt fehlt oder ist 0');
-            return;
+            return false;
         }
 
         $switchVariableID = $this->FindSwitchVariable($targetID);
         if ($switchVariableID <= 0) {
             $this->Debug('SetActuatorState', 'keine schaltbare Bool-Variable gefunden');
-            return;
+            return false;
         }
 
         try {
             RequestAction($switchVariableID, $state);
-            $this->Debug('SetActuatorState', ['SwitchVariableID' => $switchVariableID, 'Method' => 'RequestAction']);
-            return;
+            $this->Debug('SetActuatorState.Success', [
+                'TargetID' => $targetID,
+                'SwitchVariableID' => $switchVariableID,
+                'SwitchVariableName' => @IPS_GetName($switchVariableID),
+                'State' => $state
+            ]);
+            return true;
         } catch (Throwable $e) {
-            $this->Debug('SetActuatorState.RequestActionException', $e->getMessage());
+            $this->Debug('SetActuatorState.RequestActionException', [
+                'TargetID' => $targetID,
+                'SwitchVariableID' => $switchVariableID,
+                'Error' => $e->getMessage()
+            ]);
         }
 
         $this->Debug('SetActuatorState', 'nicht geschaltet: RequestAction fehlgeschlagen. Kein SetValue-Fallback.');
+        return false;
     }
 
     private function FindSwitchVariable(int $targetID): int
@@ -486,16 +507,23 @@ class IrrigationZone extends IPSModule
         if (@IPS_VariableExists($targetID)) {
             $var = IPS_GetVariable($targetID);
             if ($var['VariableType'] === VARIABLETYPE_BOOLEAN) {
-                $this->Debug('FindSwitchVariable.DirectVariable', $targetID);
+                $this->Debug('FindSwitchVariable.DirectVariable', [
+                    'VariableID' => $targetID,
+                    'Name' => @IPS_GetName($targetID),
+                    'ActionID' => $var['VariableAction']
+                ]);
                 return $targetID;
             }
         }
 
         if (!@IPS_InstanceExists($targetID)) {
+            $this->Debug('FindSwitchVariable', 'Target ist keine Instanz');
             return 0;
         }
 
         $candidates = [];
+        $debugCandidates = [];
+
         foreach (IPS_GetChildrenIDs($targetID) as $childID) {
             if (!@IPS_VariableExists($childID)) {
                 continue;
@@ -509,15 +537,31 @@ class IrrigationZone extends IPSModule
             $name = strtolower(IPS_GetName($childID));
             $ident = strtolower(IPS_GetObject($childID)['ObjectIdent']);
 
-            $bad = ['online', 'connected', 'reachable', 'update', 'firmware', 'battery', 'lowbat', 'error', 'overtemperature'];
+            $bad = ['online', 'connected', 'reachable', 'update', 'firmware', 'battery', 'lowbat', 'error', 'overtemperature', 'rssi', 'cloud'];
+            $isBad = false;
             foreach ($bad as $word) {
                 if (str_contains($name, $word) || str_contains($ident, $word)) {
-                    continue 2;
+                    $isBad = true;
+                    break;
                 }
             }
 
+            if ($isBad) {
+                $debugCandidates[] = [
+                    'ID' => $childID,
+                    'Name' => IPS_GetName($childID),
+                    'Ident' => IPS_GetObject($childID)['ObjectIdent'],
+                    'Skipped' => 'bad keyword'
+                ];
+                continue;
+            }
+
             $score = 0;
-            $good = ['state', 'status', 'switch', 'relay', 'output', 'power', 'valve', 'pump'];
+            $good = [
+                'state', 'status', 'switch', 'relay', 'output', 'power', 'valve', 'pump',
+                'schalter', 'schalten', 'ausgang', 'kanal', 'aktor'
+            ];
+
             foreach ($good as $word) {
                 if (str_contains($name, $word) || str_contains($ident, $word)) {
                     $score += 10;
@@ -529,7 +573,20 @@ class IrrigationZone extends IPSModule
             }
 
             $candidates[$childID] = $score;
+            $debugCandidates[] = [
+                'ID' => $childID,
+                'Name' => IPS_GetName($childID),
+                'Ident' => IPS_GetObject($childID)['ObjectIdent'],
+                'ActionID' => $var['VariableAction'],
+                'Score' => $score
+            ];
         }
+
+        $this->Debug('FindSwitchVariable.Candidates', [
+            'TargetID' => $targetID,
+            'TargetName' => @IPS_GetName($targetID),
+            'Candidates' => $debugCandidates
+        ]);
 
         if (count($candidates) === 0) {
             return 0;
@@ -537,9 +594,11 @@ class IrrigationZone extends IPSModule
 
         arsort($candidates);
         $selected = (int) array_key_first($candidates);
+
         $this->Debug('FindSwitchVariable.Selected', [
             'VariableID' => $selected,
             'Name' => IPS_GetName($selected),
+            'Ident' => IPS_GetObject($selected)['ObjectIdent'],
             'Score' => $candidates[$selected]
         ]);
 
