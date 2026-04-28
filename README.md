@@ -253,3 +253,16 @@ Wenn nur Aktor 2 konfiguriert ist, funktioniert er direkt.
 Wenn Aktor 1 und Aktor 2 gemeinsam konfiguriert sind, wird Aktor 2 jetzt getrennt per `IPS_RunScriptText()` nach der eingestellten Pause ausgeführt.
 
 Dadurch kann der RequestAction-Aufruf von Aktor 1 den zweiten Schaltbefehl nicht mehr blockieren.
+
+
+## Fix V3.32 – Aktor 2 zuerst schalten
+
+Beobachtung:
+- Aktor 2 funktioniert, wenn nur Aktor 2 konfiguriert ist.
+- Aktor 2 funktioniert nicht, wenn Aktor 1 direkt davor geschaltet wurde.
+
+Änderung:
+- Wenn beide Aktoren vorhanden sind, wird jetzt **Aktor 2 zuerst** geschaltet.
+- Danach wird um die eingestellte Pause gewartet.
+- Danach wird Aktor 1 geschaltet.
+- Beim Ausschalten wird ebenfalls Aktor 2 zuerst ausgeschaltet.

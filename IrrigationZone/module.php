@@ -281,39 +281,44 @@ class IrrigationZone extends IPSModule
             'Actuator2Configured' => $this->HasActuatorConfigured(2),
             'Actuator1Instance' => $this->ReadPropertyInteger('Actuator1Instance'),
             'Actuator2Instance' => $this->ReadPropertyInteger('Actuator2Instance'),
-            'DelayBetweenActuatorsMs' => $delayMs
+            'DelayBetweenActuatorsMs' => $delayMs,
+            'Order' => 'Aktor2 zuerst, wenn beide vorhanden'
         ]);
 
         if (!$FromMaster) {
             $this->SetMasterPumpState(true);
         }
 
-        $actuator1Switched = false;
-        $actuator2Switched = false;
-
         $has1 = $this->HasActuatorConfigured(1);
         $has2 = $this->HasActuatorConfigured(2);
 
-        if ($has1) {
-            $actuator1Switched = $this->SetZoneActuatorState(1, true);
-        }
+        $actuator1Switched = false;
+        $actuator2Switched = false;
 
-        if ($has2) {
+        if ($has1 && $has2) {
+            // Da Aktor 2 alleine funktioniert, aber nicht nach Aktor 1,
+            // wird bei zwei Aktoren bewusst Aktor 2 zuerst geschaltet.
+            $actuator2Switched = $this->SetZoneActuatorState(2, true);
+
+            if ($delayMs > 0) {
+                $this->Debug('StartZone.DelayBeforeActuator1', $delayMs);
+                IPS_Sleep($delayMs);
+            }
+
+            $actuator1Switched = $this->SetZoneActuatorState(1, true);
+        } else {
             if ($has1) {
-                // Aktor 2 getrennt ausführen, damit der erste RequestAction-Aufruf
-                // den zweiten xComfort/Shelly-Schaltbefehl nicht blockiert.
-                $delayUs = max(0, $delayMs) * 1000;
-                $code = 'IPS_Sleep(' . (int)$delayMs . '); IRRZ_StartActuator2Only(' . $this->InstanceID . ');';
-                $this->Debug('StartZone.Actuator2SeparateCall', $code);
-                IPS_RunScriptText($code);
-            } else {
+                $actuator1Switched = $this->SetZoneActuatorState(1, true);
+            }
+
+            if ($has2) {
                 $actuator2Switched = $this->SetZoneActuatorState(2, true);
             }
         }
 
         $this->SetValue('Actuator1Active', $actuator1Switched);
         $this->SetValue('Actuator2Active', $actuator2Switched);
-        $this->SetValue('ZoneActive', $actuator1Switched || $actuator2Switched || ($has1 && $has2));
+        $this->SetValue('ZoneActive', $actuator1Switched || $actuator2Switched);
 
         $this->WriteLog('Kreis ' . $this->ReadPropertyInteger('ZoneNumber') . ' gestartet');
     }
@@ -329,7 +334,8 @@ class IrrigationZone extends IPSModule
             'Actuator2Configured' => $this->HasActuatorConfigured(2),
             'Actuator1Instance' => $this->ReadPropertyInteger('Actuator1Instance'),
             'Actuator2Instance' => $this->ReadPropertyInteger('Actuator2Instance'),
-            'DelayBetweenActuatorsMs' => $delayMs
+            'DelayBetweenActuatorsMs' => $delayMs,
+            'Order' => 'Aktor2 zuerst, wenn beide vorhanden'
         ]);
 
         if (!$FromMaster) {
@@ -348,25 +354,27 @@ class IrrigationZone extends IPSModule
         $has1 = $this->HasActuatorConfigured(1);
         $has2 = $this->HasActuatorConfigured(2);
 
-        if ($has1) {
-            $this->SetZoneActuatorState(1, false);
-        }
+        if ($has1 && $has2) {
+            $this->SetZoneActuatorState(2, false);
 
-        if ($has2) {
-            if ($has1) {
-                $code = 'IPS_Sleep(' . (int)$delayMs . '); IRRZ_StopActuator2Only(' . $this->InstanceID . ');';
-                $this->Debug('StopZone.Actuator2SeparateCall', $code);
-                IPS_RunScriptText($code);
-            } else {
+            if ($delayMs > 0) {
+                $this->Debug('StopZone.DelayBeforeActuator1', $delayMs);
+                IPS_Sleep($delayMs);
+            }
+
+            $this->SetZoneActuatorState(1, false);
+        } else {
+            if ($has2) {
                 $this->SetZoneActuatorState(2, false);
-                $this->SetValue('Actuator2Active', false);
+            }
+
+            if ($has1) {
+                $this->SetZoneActuatorState(1, false);
             }
         }
 
         $this->SetValue('Actuator1Active', false);
-        if (!$has2 || !$has1) {
-            $this->SetValue('Actuator2Active', false);
-        }
+        $this->SetValue('Actuator2Active', false);
         $this->SetValue('ZoneActive', false);
 
         $this->WriteLog('Kreis ' . $this->ReadPropertyInteger('ZoneNumber') . ' gestoppt');
@@ -421,38 +429,6 @@ class IrrigationZone extends IPSModule
         } catch (Throwable $e) {
             $this->Debug('SetMasterPumpState.Exception', $e->getMessage());
         }
-    }
-
-    public function StartActuator2Only(): void
-    {
-        $this->Debug('StartActuator2Only', 'gestartet');
-
-        if (!$this->HasActuatorConfigured(2)) {
-            $this->Debug('StartActuator2Only', 'Aktor 2 nicht konfiguriert');
-            return;
-        }
-
-        $switched = $this->SetZoneActuatorState(2, true);
-        $this->SetValue('Actuator2Active', $switched);
-        $this->SetValue('ZoneActive', $this->GetValue('Actuator1Active') || $switched);
-
-        $this->Debug('StartActuator2Only.Result', $switched);
-    }
-
-    public function StopActuator2Only(): void
-    {
-        $this->Debug('StopActuator2Only', 'gestartet');
-
-        if (!$this->HasActuatorConfigured(2)) {
-            $this->Debug('StopActuator2Only', 'Aktor 2 nicht konfiguriert');
-            return;
-        }
-
-        $this->SetZoneActuatorState(2, false);
-        $this->SetValue('Actuator2Active', false);
-        $this->SetValue('ZoneActive', $this->GetValue('Actuator1Active'));
-
-        $this->Debug('StopActuator2Only', 'abgeschlossen');
     }
 
     public function IsEnabled(): bool
