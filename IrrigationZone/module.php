@@ -66,7 +66,7 @@ class IrrigationZone extends IPSModule
         $this->RegisterVariableFloat('ComputedMoisture', 'Berechnete Feuchte', 'IRR.PercentFloat', 130);
         $this->RegisterVariableBoolean('ShouldWater', 'Automatik: Bewässern', '~Switch', 140);
         $this->RegisterVariableString('DecisionText', 'Entscheidung', '', 150);
-        $this->RegisterVariableString('LastAction', 'Letzte 10 Aktionen', '', 160);
+        $this->RegisterVariableString('LastAction', 'Letzte 4 Aktionen', '', 160);
 
         $this->SetBuffer('RegisteredMessages', json_encode([]));
         $this->SetBuffer('Actuator1SwitchVariableID', '0');
@@ -913,7 +913,7 @@ class IrrigationZone extends IPSModule
         }
 
         array_unshift($lines, $line);
-        $lines = array_slice($lines, 0, 10);
+        $lines = array_slice($lines, 0, 4);
 
         $this->SetValue('LastAction', implode("
 ", $lines));
