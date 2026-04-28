@@ -211,3 +211,11 @@ Wenn Aktor 1 und Aktor 2 gemeinsam konfiguriert waren, blockierte offenbar der e
 - Stattdessen werden sie über `EnsureTimerEvent()` nur angelegt, wenn sie noch nicht existieren.
 - Damit wird der Fehler „Timer ... ist bereits vorhanden“ vermieden.
 - Wenn das Konfigurieren einer neuen Zone fehlschlägt, wird die defekte Root-Zone wieder gelöscht.
+
+
+## Fix V3.27 – Timer wieder korrekt registriert
+
+- Die manuell erstellten Timer aus V3.26 wurden entfernt.
+- `SetTimerInterval()` benötigt Timer, die über `RegisterTimer()` registriert sind.
+- Beim Laden werden alte fehlerhafte Timer-Events mit gleicher Ident gelöscht und sauber neu registriert.
+- Dadurch funktionieren `StartActuator2Timer` und `StopActuator2Timer` wieder mit `SetTimerInterval()`.

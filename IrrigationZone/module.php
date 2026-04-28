@@ -68,7 +68,11 @@ class IrrigationZone extends IPSModule
         $this->RegisterVariableString('DecisionText', 'Entscheidung', '', 150);
         $this->RegisterVariableString('LastAction', 'Letzte 10 Aktionen', '', 160);
 
-        $this->EnsureActuatorTimers();
+        $this->CleanupTimer('StartActuator2Timer');
+        $this->CleanupTimer('StopActuator2Timer');
+
+        $this->RegisterTimer('StartActuator2Timer', 0, 'IRRZ_StartActuator2Delayed($_IPS[\'TARGET\']);');
+        $this->RegisterTimer('StopActuator2Timer', 0, 'IRRZ_StopActuator2Delayed($_IPS[\'TARGET\']);');
 
         $this->SetBuffer('RegisteredMessages', json_encode([]));
         $this->Debug('Create', 'Zone initialisiert');
@@ -772,8 +776,6 @@ class IrrigationZone extends IPSModule
             }
         }
 
-        $this->EnsureActuatorTimers();
-
         $this->SetBuffer('RegisteredMessages', json_encode([]));
     }
 
@@ -819,29 +821,11 @@ class IrrigationZone extends IPSModule
         }
     }
 
-    private function EnsureActuatorTimers(): void
+    private function CleanupTimer(string $Ident): void
     {
-        $this->EnsureTimerEvent('StartActuator2Timer', 'IRRZ_StartActuator2Delayed($_IPS[\'TARGET\']);');
-        $this->EnsureTimerEvent('StopActuator2Timer', 'IRRZ_StopActuator2Delayed($_IPS[\'TARGET\']);');
-    }
-
-    private function EnsureTimerEvent(string $Ident, string $Script): void
-    {
-        $timerID = @IPS_GetObjectIDByIdent($Ident, $this->InstanceID);
-
-        if ($timerID === false) {
-            $timerID = IPS_CreateEvent(1);
-            IPS_SetParent($timerID, $this->InstanceID);
-            IPS_SetIdent($timerID, $Ident);
-            IPS_SetName($timerID, $Ident);
-            IPS_SetHidden($timerID, true);
-        }
-
-        if (@IPS_EventExists($timerID)) {
-            IPS_SetEventActive($timerID, false);
-            IPS_SetEventScript($timerID, $Script);
-            // Sekunden-Timer; Intervall wird später über SetTimerInterval gesetzt.
-            IPS_SetEventCyclic($timerID, 0, 0, 0, 0, 1, 0);
+        $eventID = @IPS_GetObjectIDByIdent($Ident, $this->InstanceID);
+        if ($eventID !== false && @IPS_EventExists($eventID)) {
+            @IPS_DeleteEvent($eventID);
         }
     }
 
