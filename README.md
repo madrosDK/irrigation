@@ -282,3 +282,11 @@ Beobachtung:
 - Beim Ausschalten wird zuerst genau diese gemerkte Variable wieder ausgeschaltet.
 - Das verhindert, dass beim Stop eine andere Bool-Variable unter der Aktor-Instanz gewählt wird.
 - Im Sequenzbetrieb gibt es zusätzlich einen zweiten Sicherheitsversuch für Aktor 2 AUS.
+
+
+## Fix V3.35 – Pumpe nach Sequenzende sicher aus
+
+- `FinishCurrentZone()` prüft nach jedem Kreisende die Queue.
+- Wenn kein weiterer Kreis wartet, wird die Sequenz direkt dort beendet.
+- Die Pumpe wird dabei garantiert ausgeschaltet.
+- `StopSequence()` schaltet die Pumpe ebenfalls immer aus.

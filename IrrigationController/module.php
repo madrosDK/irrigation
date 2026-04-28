@@ -363,6 +363,7 @@ class IrrigationController extends IPSModule
             @IRRZ_StopZone($currentZoneID, true);
         }
 
+        // Wichtig: Bei manuellem Sequenzstop Pumpe IMMER ausschalten.
         $this->SetPumpState(false);
 
         $this->SetBuffer('Queue', json_encode([]));
@@ -387,6 +388,7 @@ class IrrigationController extends IPSModule
             $this->Debug('StartNextZone', 'Queue leer');
             $this->SetBuffer('CurrentZoneID', '0');
             $this->SetPumpState(false);
+            $this->SetValue('PumpActive', false);
             $this->SetValue('SequenceActive', false);
             $this->SetValue('PumpActive', false);
             $this->SetValue('CurrentZone', 0);
@@ -482,6 +484,22 @@ class IrrigationController extends IPSModule
         }
 
         $this->SetBuffer('CurrentZoneID', '0');
+
+        $queue = $this->GetQueue();
+
+        // Wenn kein weiterer Kreis mehr wartet, Sequenz hier sauber beenden
+        // und Pumpe garantiert ausschalten.
+        if (count($queue) === 0) {
+            $this->Debug('FinishCurrentZone', 'Queue leer nach Kreisende -> Sequenz abschließen und Pumpe AUS');
+            $this->SetTimerInterval('StartNextZoneTimer', 0);
+            $this->SetPumpState(false);
+            $this->SetValue('PumpActive', false);
+            $this->SetValue('SequenceActive', false);
+            $this->SetValue('CurrentZone', 0);
+            $this->SetValue('QueueCount', 0);
+            $this->WriteLog('Sequenz abgeschlossen');
+            return;
+        }
 
         $pauseSeconds = max(0, $this->ReadPropertyInteger('PauseBetweenZonesSeconds'));
         $this->Debug('FinishCurrentZone.PauseSeconds', $pauseSeconds);
