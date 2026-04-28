@@ -69,6 +69,8 @@ class IrrigationZone extends IPSModule
         $this->RegisterVariableString('LastAction', 'Letzte 10 Aktionen', '', 160);
 
         $this->SetBuffer('RegisteredMessages', json_encode([]));
+        $this->SetBuffer('Actuator1SwitchVariableID', '0');
+        $this->SetBuffer('Actuator2SwitchVariableID', '0');
         $this->Debug('Create', 'Zone initialisiert');
     }
 
@@ -374,9 +376,24 @@ class IrrigationZone extends IPSModule
             $this->SetZoneActuatorState(1, false);
         }
 
+        // Sicherheitsversuch im Sequenzbetrieb:
+        // Falls Aktor 2 durch Gateway/Timing nicht beim ersten Versuch ausging,
+        // nochmals nach Aktor 1 ausschalten.
+        if ($FromMaster && $has2) {
+            if ($delayMs > 0) {
+                IPS_Sleep($delayMs);
+            }
+            $this->Debug('StopZone', 'Sicherheitsversuch: Aktor 2 nochmals AUS');
+            $this->SetZoneActuatorState(2, false);
+        }
+
         $this->SetValue('Actuator1Active', false);
         $this->SetValue('Actuator2Active', false);
         $this->SetValue('ZoneActive', false);
+
+        // Sicherheit: nach Stop keine alten Schaltvariablen merken.
+        $this->SetBuffer('Actuator1SwitchVariableID', '0');
+        $this->SetBuffer('Actuator2SwitchVariableID', '0');
 
         $this->WriteLog('Kreis ' . $this->ReadPropertyInteger('ZoneNumber') . ' gestoppt');
     }
@@ -463,7 +480,7 @@ class IrrigationZone extends IPSModule
             return false;
         }
 
-        return $this->SetActuatorState($targetID, $state);
+        return $this->SetActuatorState($targetID, $state, $number);
     }
 
     private function GetActuatorTargetID(int $number): int
@@ -593,12 +610,13 @@ class IrrigationZone extends IPSModule
         return $name . ': ' . $formatted;
     }
 
-    private function SetActuatorState(int $targetID, bool $state): bool
+    private function SetActuatorState(int $targetID, bool $state, int $actuatorNumber = 0): bool
     {
         $this->Debug('SetActuatorState', [
             'TargetID' => $targetID,
             'TargetName' => ($targetID > 0 && @IPS_ObjectExists($targetID)) ? @IPS_GetName($targetID) : '',
-            'State' => $state
+            'State' => $state,
+            'ActuatorNumber' => $actuatorNumber
         ]);
 
         if ($targetID <= 0 || !@IPS_ObjectExists($targetID)) {
@@ -606,34 +624,66 @@ class IrrigationZone extends IPSModule
             return false;
         }
 
-        $candidates = $this->FindSwitchVariableCandidates($targetID);
+        $bufferIdent = $actuatorNumber === 2 ? 'Actuator2SwitchVariableID' : 'Actuator1SwitchVariableID';
+
+        $candidates = [];
+
+        // Beim Ausschalten zuerst exakt dieselbe Schaltvariable verwenden,
+        // die beim Einschalten erfolgreich war.
+        // Das ist wichtig bei Shelly/xComfort, wenn unter einer Instanz mehrere Bool-Variablen liegen.
+        if (!$state && $actuatorNumber > 0) {
+            $lastSwitchVariableID = (int) $this->GetBuffer($bufferIdent);
+            if ($lastSwitchVariableID > 0 && @IPS_VariableExists($lastSwitchVariableID)) {
+                $candidates[] = $lastSwitchVariableID;
+                $this->Debug('SetActuatorState.UsingLastSwitchVariable', [
+                    'ActuatorNumber' => $actuatorNumber,
+                    'SwitchVariableID' => $lastSwitchVariableID,
+                    'Name' => @IPS_GetName($lastSwitchVariableID)
+                ]);
+            }
+        }
+
+        foreach ($this->FindSwitchVariableCandidates($targetID) as $candidateID) {
+            if (!in_array($candidateID, $candidates, true)) {
+                $candidates[] = $candidateID;
+            }
+        }
+
         if (count($candidates) === 0) {
             $this->Debug('SetActuatorState', 'keine geeignete schaltbare Bool-Variable gefunden');
             return false;
         }
 
-        // Wichtig für Aktor 2:
-        // Nicht nur den ersten Kandidaten versuchen. Falls xComfort/Shelly eine
-        // Bool-Variable mit Action hat, aber diese nicht reagiert, probieren wir
-        // den nächsten Kandidaten.
         foreach ($candidates as $switchVariableID) {
             $this->Debug('SetActuatorState.RequestAction.Start', [
                 'SwitchVariableID' => $switchVariableID,
                 'SwitchVariableName' => @IPS_GetName($switchVariableID),
-                'State' => $state
+                'State' => $state,
+                'ActuatorNumber' => $actuatorNumber
             ]);
 
             try {
                 RequestAction($switchVariableID, $state);
                 $this->Debug('SetActuatorState.RequestAction.Success', [
                     'SwitchVariableID' => $switchVariableID,
-                    'State' => $state
+                    'State' => $state,
+                    'ActuatorNumber' => $actuatorNumber
                 ]);
+
+                if ($actuatorNumber > 0) {
+                    if ($state) {
+                        $this->SetBuffer($bufferIdent, (string) $switchVariableID);
+                    } else {
+                        $this->SetBuffer($bufferIdent, '0');
+                    }
+                }
+
                 return true;
             } catch (Throwable $e) {
                 $this->Debug('SetActuatorState.RequestAction.Exception', [
                     'SwitchVariableID' => $switchVariableID,
-                    'Error' => $e->getMessage()
+                    'Error' => $e->getMessage(),
+                    'ActuatorNumber' => $actuatorNumber
                 ]);
             }
         }
@@ -799,6 +849,8 @@ class IrrigationZone extends IPSModule
         }
 
         $this->SetBuffer('RegisteredMessages', json_encode([]));
+        $this->SetBuffer('Actuator1SwitchVariableID', '0');
+        $this->SetBuffer('Actuator2SwitchVariableID', '0');
     }
 
     private function UpdateStatus(): void

@@ -274,3 +274,11 @@ Beobachtung:
 - `StopZone()` schaltet Aktor 2 im Sequenzbetrieb immer explizit aus, wenn er konfiguriert ist.
 - Aktor 2 wird beim Stop zuerst ausgeschaltet, danach mit Pause Aktor 1.
 - Das Ausschalten hängt nicht mehr vom Statuswert `Actuator2Active` ab.
+
+
+## Fix V3.34 – Aktor 2 beim Sequenz-Stop sicher ausschalten
+
+- Beim Einschalten merkt sich der Kreis die konkret erfolgreich geschaltete Bool-Variable je Aktor.
+- Beim Ausschalten wird zuerst genau diese gemerkte Variable wieder ausgeschaltet.
+- Das verhindert, dass beim Stop eine andere Bool-Variable unter der Aktor-Instanz gewählt wird.
+- Im Sequenzbetrieb gibt es zusätzlich einen zweiten Sicherheitsversuch für Aktor 2 AUS.
