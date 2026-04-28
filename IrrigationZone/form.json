@@ -17,7 +17,7 @@
         {
           "name": "Duration",
           "type": "NumberSpinner",
-          "caption": "Beregnungsdauer (Minuten, 0 = Master-Standard)"
+          "caption": "Beregnungsdauer (Minuten)"
         },
         {
           "name": "MoistureThreshold",
@@ -68,22 +68,16 @@
         {
           "name": "Actuator1Instance",
           "type": "SelectInstance",
-          "caption": "Aktor 1 Instanz (Shelly/xComfort, optional)"
-        },
-        {
-          "name": "Actuator1Variable",
-          "type": "SelectVariable",
-          "caption": "Aktor 1 Schaltvariable Bool (optional, wird bevorzugt)"
+          "caption": "Aktor 1 Instanz (Shelly oder xComfort, optional)"
         },
         {
           "name": "Actuator2Instance",
           "type": "SelectInstance",
-          "caption": "Aktor 2 Instanz (Shelly/xComfort, optional)"
+          "caption": "Aktor 2 Instanz (Shelly oder xComfort, optional)"
         },
         {
-          "name": "Actuator2Variable",
-          "type": "SelectVariable",
-          "caption": "Aktor 2 Schaltvariable Bool (optional, wird bevorzugt)"
+          "type": "Label",
+          "caption": "Beide Aktoren sind optional. Das Modul sucht unter der Instanz automatisch die passende schaltbare Bool-Variable und schaltet diese mit RequestAction."
         }
       ]
     }

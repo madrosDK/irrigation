@@ -1,53 +1,137 @@
-# irrigation V3.3
+# irrigation V3.5
 
-Fix-Version zur Master-/Kreis-Struktur.
+Diese Version basiert für das Anlegen neuer Kreise wieder auf der V3.2-Logik.
 
-## Wichtigste Änderungen
+## Wichtig
 
-- Pumpe kann jetzt als Instanz oder direkt als boolesche Schaltvariable gewählt werden.
-- Direkte Schaltvariable wird bevorzugt.
-- Alte V3.1-Property `Pump` bleibt als Kompatibilität erhalten.
-- Kreise können per Button direkt unter der Master-Instanz angelegt werden.
-- Jeder Kreis kann zwei Aktoren verwenden.
-- Jeder Kreis kann Aktor-Instanz oder direkte Bool-Schaltvariable verwenden.
-- Automatik pro Kreis:
-  - niedrigster Feuchtigkeitswert
-  - Durchschnitt
+- Pumpe wird im Formular nur noch als Instanz ausgewählt.
+- Aktor 1 und Aktor 2 werden im Kreis nur noch als Instanzen ausgewählt.
+- Das Modul sucht selbstständig unter Shelly/xComfort die passende schaltbare Bool-Variable.
+- Geschaltet wird per `RequestAction()` auf diese Bool-Variable.
+- Keine separate Bool-Schaltvariable im Formular.
+- Keine Standarddauer im Master.
+- Jeder Kreis hat seine eigene Beregnungsdauer.
+- Pumpe kann vor Ende des letzten Kreises um X Sekunden abgeschaltet werden.
 
-## Wenn das Hauptmodul "Keine Kreise oder keine Pumpe konfiguriert" meldet
+## Kreis anlegen
 
-1. In der Master-Instanz eine Pumpe auswählen:
-   - bevorzugt: `Pumpen-Schaltvariable Bool`
-   - alternativ: `Pumpenaktor Instanz`
+Die Funktion `CreateZone()` ist wieder auf der V3.2-Basis:
 
-2. Danach im Master auf **Neuen Kreis unter dieser Instanz anlegen** klicken.
-
-3. In jedem Kreis mindestens einen Aktor konfigurieren:
-   - bevorzugt: direkte Bool-Schaltvariable
-   - alternativ: Instanz
-
-## Warum zwei Auswahlfelder?
-
-Shelly und xComfort unterscheiden sich je nach Modul darin, ob zuverlässig über die Instanz oder über eine darunterliegende Status-/Schaltvariable geschaltet wird.
-
-Die direkte Bool-Variable ist am zuverlässigsten.
-
-## Objektbaum
-
-```text
-Bewässerung Master
-├── Kreis 1
-├── Kreis 2
-└── Kreis 3
+```php
+$zoneID = IPS_CreateInstance(self::MODULE_ID_ZONE);
+IPS_SetParent($zoneID, $this->InstanceID);
+IPS_SetName($zoneID, 'Kreis ' . $number);
+IPS_SetProperty($zoneID, 'ZoneNumber', $number);
+IPS_ApplyChanges($zoneID);
 ```
 
+## Hinweis nach Update
 
-## Änderung V3.3
+Nach dem Kopieren:
+1. Module neu laden
+2. Master-Instanz öffnen
+3. Änderungen übernehmen
+4. Neue Kreise testweise anlegen
 
-- Pro Kreis gibt es nur noch **Aktor 1** und **Aktor 2**.
-- Beide Aktoren sind optional.
-- Ein Aktor kann Shelly oder xComfort sein.
-- Für jeden Aktor kann entweder die Instanz oder direkt die Bool-Schaltvariable gewählt werden.
-- Die direkte Bool-Schaltvariable wird bevorzugt.
-- Geschaltet wird immer über `RequestAction()` auf die Bool-Schaltvariable.
-- Es gibt keinen `SetValue()`-Fallback mehr, da dadurch bei Shelly/xComfort oft nur der Variablenwert geändert wird, aber der Aktor nicht wirklich schaltet.
+Falls noch alte, falsch platzierte Kreise im Root liegen, diese bitte löschen.
+
+
+## Änderung V3.6 – Wochenplan-Logik
+
+Die Wochenpläne lösen jetzt direkt die Sequenz aus.
+
+### Zeitsteuerung
+
+Wenn der Wochenplan **Zeitsteuerung** auf **Ein** schaltet:
+
+- nur wenn Betriebsmodus = `Zeitsteuerung`
+- nur der Schaltpunkt `Ein` wird ausgewertet
+- `Aus` wird ignoriert
+- alle aktiven Kreise werden nacheinander bewässert
+- jeder Kreis läuft für seine eigene eingestellte Beregnungsdauer
+
+### Automatik
+
+Wenn der Wochenplan **Automatik** auf **Ein** schaltet:
+
+- nur wenn Betriebsmodus = `Automatik`
+- nur der Schaltpunkt `Ein` wird ausgewertet
+- `Aus` wird ignoriert
+- aktive Kreise werden einzeln geprüft
+- Kreise mit `Automatik sagt nein` werden übersprungen
+- Kreise mit Bewässerungsbedarf laufen nacheinander
+
+### Laufende Sequenz
+
+Wenn bereits eine Sequenz läuft und ein neuer Schaltpunkt kommt, wird dieser ignoriert.
+
+
+## Fix V3.7 – Wochenplan-Auslösung
+
+Die Wochenpläne hängen jetzt unter eigenen Trigger-Variablen:
+
+- `Zeitsteuerung Trigger`
+- `Automatik Trigger`
+
+Der Wochenplan schaltet diese Variable auf `true`.
+Dadurch läuft die Auswertung zuverlässig über `RequestAction()`.
+
+Wichtig:
+- Nur `Ein` startet eine Sequenz.
+- `Aus` wird ignoriert.
+- Nach `Ein` setzt das Modul den Trigger automatisch wieder auf `false`, damit der nächste Ein-Schaltpunkt wieder auslöst.
+
+
+## Fix V3.7.1
+
+- Fehlende Methoden `HandleScheduleTimer()` und `HandleScheduleAuto()` ergänzt.
+- Fehler `Call to undefined method IrrigationController::HandleScheduleTimer()` behoben.
+
+
+## Änderung V3.8 – keine Trigger-Schalter mehr
+
+Die sichtbaren Trigger-Variablen wurden entfernt.
+
+Die Wochenpläne liegen wieder direkt unter der Master-Instanz:
+
+- `Zeitsteuerung`
+- `Automatik`
+
+Wenn der jeweilige Wochenplan auf **Ein** schaltet, startet automatisch die passende Sequenz:
+
+- Modus `Zeitsteuerung` + Wochenplan `Zeitsteuerung` = alle aktiven Kreise nacheinander
+- Modus `Automatik` + Wochenplan `Automatik` = nur aktive Kreise mit Feuchtebedarf
+
+`Aus` wird weiterhin ignoriert.
+
+
+## Änderung V3.10 – Wochenplan-Aktion mit direktem PHP-Code
+
+Die interne Trigger-Varianten wurden rückgängig gemacht.
+
+Die Wochenpläne liegen direkt unter der Master-Instanz.
+
+Bei der Aktion **Ein** wird direkt PHP-Code hinterlegt:
+
+- Zeitsteuerung:
+  `IRR_StartManualSequence(...)`
+
+- Automatik:
+  `IRR_StartAutomaticSequence(...)`
+
+Die Aktion **Aus** bleibt leer und wird nicht verwendet.
+
+
+## Fix V3.11 – Kreise aktualisieren setzt Status neu
+
+Der Button **Kreise aktualisieren** ruft jetzt zusätzlich auf:
+
+- `UpdateWeekplanVisibility()`
+- `UpdateStatus()`
+
+Damit wird die Master-Instanz sofort wieder aktiv, sobald Kreise und Pumpe vorhanden sind.
+Es ist nicht mehr nötig, erst eine Formulareigenschaft wie den Pumpenaktor zu ändern.
+
+Zusätzlich wurde die Wochenplan-Aktion vereinfacht:
+- Zeitsteuerung Ein: `IRR_StartManualSequence(...)`
+- Automatik Ein: `IRR_StartAutomaticSequence(...)`
