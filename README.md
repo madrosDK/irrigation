@@ -238,3 +238,10 @@ Wenn Aktor 1 und Aktor 2 gemeinsam konfiguriert waren, blockierte offenbar der e
   3. erst danach Aktor 1 und Aktor 2 aus
 - Beim Schalten eines Aktors werden jetzt mehrere passende Bool-Schaltvariablen versucht, nicht nur der erste Kandidat.
 - Das soll vor allem bei Aktor 2 helfen, wenn Shelly/xComfort mehrere Bool-Variablen unter einer Instanz hat.
+
+
+## Fix V3.30 – fehlende Master-Pumpen-Methode im Kreis
+
+- Fehlende Methode `SetMasterPumpState()` im Kreismodul ergänzt.
+- Fehlende Methode `GetMasterPumpEarlyOffSeconds()` im Kreismodul ergänzt.
+- Dadurch funktioniert der manuelle Kreisstart/Stop mit Pumpensteuerung wieder.

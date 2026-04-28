@@ -361,6 +361,57 @@ class IrrigationZone extends IPSModule
         $this->WriteLog('Kreis ' . $this->ReadPropertyInteger('ZoneNumber') . ' gestoppt');
     }
 
+    private function GetMasterPumpEarlyOffSeconds(): int
+    {
+        $parentID = @IPS_GetParent($this->InstanceID);
+        if ($parentID <= 0 || !@IPS_InstanceExists($parentID)) {
+            return 0;
+        }
+
+        try {
+            if (function_exists('IRR_GetPumpEarlyOffSeconds')) {
+                $value = @IRR_GetPumpEarlyOffSeconds($parentID);
+                if (is_int($value)) {
+                    return max(0, $value);
+                }
+            }
+
+            $value = @IPS_GetProperty($parentID, 'PumpEarlyOffSeconds');
+            if (is_numeric($value)) {
+                return max(0, (int) $value);
+            }
+        } catch (Throwable $e) {
+            $this->Debug('GetMasterPumpEarlyOffSeconds.Exception', $e->getMessage());
+        }
+
+        return 0;
+    }
+
+    private function SetMasterPumpState(bool $state): void
+    {
+        $parentID = @IPS_GetParent($this->InstanceID);
+
+        $this->Debug('SetMasterPumpState', [
+            'ParentID' => $parentID,
+            'State' => $state
+        ]);
+
+        if ($parentID <= 0 || !@IPS_InstanceExists($parentID)) {
+            $this->Debug('SetMasterPumpState', 'kein gültiger Master als Parent gefunden');
+            return;
+        }
+
+        try {
+            if ($state) {
+                @IRR_StartPumpFromZone($parentID);
+            } else {
+                @IRR_StopPumpFromZone($parentID);
+            }
+        } catch (Throwable $e) {
+            $this->Debug('SetMasterPumpState.Exception', $e->getMessage());
+        }
+    }
+
     public function IsEnabled(): bool
     {
         return $this->ReadPropertyBoolean('Enabled');
