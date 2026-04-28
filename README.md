@@ -187,3 +187,10 @@ Wenn Aktor 1 und Aktor 2 gemeinsam konfiguriert waren, blockierte offenbar der e
 - Die letzten 10 Aktionen werden mit Zeitstempel untereinander angezeigt.
 - Die Kreisübersicht zeigt jeden Kreis in einer eigenen Zeile.
 - Doppelte Bezeichnungen wie `Kreis 1 | Kreis 1` wurden entfernt.
+
+
+## Fix V3.17 – Zeilenumbrüche im WebFront
+
+- `Letzte 10 Aktionen` nutzt jetzt `<br>` statt `\n`.
+- `Kreisübersicht` nutzt jetzt `<br>` statt `\n`.
+- Dadurch werden die Einträge im IP-Symcon WebFront wirklich untereinander angezeigt.

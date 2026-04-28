@@ -834,7 +834,8 @@ class IrrigationController extends IPSModule
 
         if (is_string($old) && trim($old) !== '') {
             $lines = preg_split('/
-||
+|
+|
 /', trim($old));
             if (!is_array($lines)) {
                 $lines = [];
