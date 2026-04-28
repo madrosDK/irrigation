@@ -147,3 +147,13 @@ Zusätzlich wurde die Wochenplan-Aktion vereinfacht:
   - gefundene Bool-Schaltvariable
   - Kandidaten unter Shelly/xComfort
   - Erfolg oder Fehler von `RequestAction()`
+
+
+## Fix V3.13 – Aktor 2 mit identischer Universal-Logik
+
+- Aktor 1 und Aktor 2 verwenden jetzt dieselbe gemeinsame Resolver-Logik.
+- Für beide Aktoren wird zuerst die konfigurierte Instanz genommen.
+- Darunter sucht das Modul die passende boolesche Schaltvariable.
+- Die Auswahl bevorzugt Variablen mit `VariableAction`.
+- Diagnosevariablen wie Online, Connected, Error, Battery usw. werden verworfen.
+- Debug zeigt für Aktor 2 dieselbe Auswertung wie für Aktor 1.
