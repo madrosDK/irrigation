@@ -1,6 +1,6 @@
 # IrrigationController für IP-Symcon
 
-**Version 4.0**
+**Version 4.1**
 
 ## Überblick
 

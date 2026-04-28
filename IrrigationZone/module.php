@@ -926,16 +926,16 @@ class IrrigationZone extends IPSModule
             return '';
         }
 
-        $html = '<div style="font-family:Arial, sans-serif; font-size:13px; line-height:1.45;">';
+        $html = '<div style="font-family:Tahoma, Arial, sans-serif; font-size:10px; line-height:1.35; text-align:right;">';
 
         foreach ($entries as $entry) {
             $time = isset($entry['time']) ? htmlspecialchars((string) $entry['time'], ENT_QUOTES, 'UTF-8') : '';
             $message = isset($entry['message']) ? htmlspecialchars((string) $entry['message'], ENT_QUOTES, 'UTF-8') : '';
 
-            $html .= '<div style="margin-bottom:4px; padding:2px 0;">';
-            $html .= '<span style="color:#0066cc; font-weight:bold;">' . $time . '</span>';
-            $html .= '<span style="color:#666;"> &ndash; </span>';
-            $html .= '<span style="color:#222;">' . $message . '</span>';
+            $html .= '<div style="margin-bottom:2px; padding:1px 0;">';
+            $html .= '<span style="color:#4da6ff; font-weight:bold;">' . $time . '</span>';
+            $html .= '<span style="color:#ffffff;"> &ndash; </span>';
+            $html .= '<span style="color:#ffffff;">' . $message . '</span>';
             $html .= '</div>';
         }
 
