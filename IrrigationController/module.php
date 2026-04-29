@@ -292,6 +292,9 @@ class IrrigationController extends IPSModule
 
         foreach ($zones as $zoneID) {
             $number = @IRRZ_GetZoneNumber($zoneID);
+            if (is_int($number)) {
+                @IPS_SetPosition($zoneID, 1000 + $number);
+            }
             $name = @IPS_GetName($zoneID);
 
             // Keine doppelte Ausgabe wie "Kreis 1 | Kreis 1".
