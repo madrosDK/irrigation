@@ -950,7 +950,7 @@ class IrrigationController extends IPSModule
 
     private function RenderZoneOverviewHtml(array $parts): string
     {
-        $html = '<div style="font-family:Tahoma, Arial, sans-serif; font-size:10px; line-height:1.35; text-align:right;">';
+        $html = '<div style="font-family:Tahoma, Arial, sans-serif; font-size:12px; line-height:1.35; text-align:right;">';
 
         if (count($parts) === 0) {
             $html .= '<span style="color:#ffffff;">Keine Kreise unter dieser Master-Instanz gefunden</span>';
