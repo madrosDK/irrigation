@@ -249,6 +249,7 @@ class IrrigationController extends IPSModule
         try {
             IPS_SetParent($zoneID, $this->InstanceID);
             IPS_SetName($zoneID, 'Kreis ' . $number);
+            IPS_SetPosition($zoneID, 1000 + $number);
             IPS_SetProperty($zoneID, 'ZoneNumber', $number);
             IPS_ApplyChanges($zoneID);
         } catch (Throwable $e) {
