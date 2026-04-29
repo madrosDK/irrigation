@@ -47,8 +47,8 @@ class IrrigationController extends IPSModule
         $this->RegisterVariableInteger('CurrentZone', 'Aktueller Kreis', '', 70);
         $this->RegisterVariableInteger('QueueCount', 'Wartende Kreise', '', 80);
         $this->RegisterVariableString('DecisionText', 'Sequenzstatus', '', 90);
-        $this->RegisterVariableString('LastAction', 'Letzte 10 Aktionen', '', 100);
-        $this->RegisterVariableString('ZoneOverview', 'Kreisübersicht', '', 110);
+        $this->RegisterVariableString('LastAction', 'Letzte 10 Aktionen', '~HTMLBox', 100);
+        $this->RegisterVariableString('ZoneOverview', 'Kreisübersicht', '~HTMLBox', 110);
 
         $this->RegisterTimer('StartCurrentZoneAfterPumpTimer', 0, 'IRR_StartCurrentZoneAfterPumpLead($_IPS[\'TARGET\']);');
         $this->RegisterTimer('StopPumpEarlyTimer', 0, 'IRR_StopPumpEarly($_IPS[\'TARGET\']);');
@@ -249,6 +249,7 @@ class IrrigationController extends IPSModule
         try {
             IPS_SetParent($zoneID, $this->InstanceID);
             IPS_SetName($zoneID, 'Kreis ' . $number);
+            IPS_SetPosition($zoneID, 1000 + $number);
             IPS_SetProperty($zoneID, 'ZoneNumber', $number);
             IPS_ApplyChanges($zoneID);
         } catch (Throwable $e) {
@@ -291,6 +292,9 @@ class IrrigationController extends IPSModule
 
         foreach ($zones as $zoneID) {
             $number = @IRRZ_GetZoneNumber($zoneID);
+            if (is_int($number)) {
+                @IPS_SetPosition($zoneID, 1000 + $number);
+            }
             $name = @IPS_GetName($zoneID);
 
             // Keine doppelte Ausgabe wie "Kreis 1 | Kreis 1".
@@ -303,8 +307,7 @@ class IrrigationController extends IPSModule
             }
         }
 
-        $this->SetValue('ZoneOverview', count($parts) > 0 ? implode("
-", $parts) : 'Keine Kreise unter dieser Master-Instanz gefunden');
+        $this->SetValue('ZoneOverview', $this->RenderZoneOverviewHtml($parts));
         $this->SetValue('QueueCount', count($this->GetQueue()));
 
         $this->UpdateWeekplanVisibility();
@@ -417,11 +420,18 @@ class IrrigationController extends IPSModule
         $this->SetValue('CurrentZone', @IRRZ_GetZoneNumber($zoneID));
         $this->SetValue('QueueCount', count($queue));
 
-        $this->WriteLog('Bereite Kreis ' . @IRRZ_GetZoneNumber($zoneID) . ' vor: Pumpe EIN, danach Vorlauf');
-        $this->SetPumpState(true);
+        $isFirstZone = !$this->GetValue('PumpActive');
 
-        $leadMs = max(0, $this->ReadPropertyInteger('PumpLeadTimeSeconds')) * 1000;
-        $this->SetTimerInterval('StartCurrentZoneAfterPumpTimer', max(100, $leadMs));
+        if ($isFirstZone) {
+            $this->WriteLog('Bereite Kreis ' . @IRRZ_GetZoneNumber($zoneID) . ' vor: Pumpe EIN, danach Vorlauf');
+            $this->SetPumpState(true);
+
+            $leadMs = max(0, $this->ReadPropertyInteger('PumpLeadTimeSeconds')) * 1000;
+            $this->SetTimerInterval('StartCurrentZoneAfterPumpTimer', max(100, $leadMs));
+        } else {
+            $this->WriteLog('Starte nächsten Kreis ' . @IRRZ_GetZoneNumber($zoneID) . ' nach Pause');
+            $this->SetTimerInterval('StartCurrentZoneAfterPumpTimer', 100);
+        }
     }
 
     public function StartCurrentZoneAfterPumpLead(): void
@@ -904,29 +914,83 @@ class IrrigationController extends IPSModule
 
     private function WriteLog(string $message): void
     {
-        $line = date('d.m.Y H:i:s') . ' - ' . $message;
+        $entries = [];
+        $buffer = $this->GetBuffer('LastActionLog');
 
-        $old = $this->GetValue('LastAction');
-        $lines = [];
-
-        if (is_string($old) && trim($old) !== '') {
-            $lines = preg_split('/
-|
-|
-/', trim($old));
-            if (!is_array($lines)) {
-                $lines = [];
+        if (is_string($buffer) && trim($buffer) !== '') {
+            $decoded = json_decode($buffer, true);
+            if (is_array($decoded)) {
+                $entries = $decoded;
             }
         }
 
-        array_unshift($lines, $line);
-        $lines = array_slice($lines, 0, 10);
+        array_unshift($entries, [
+            'time'    => date('d.m.Y H:i:s'),
+            'message' => $message
+        ]);
 
-        $this->SetValue('LastAction', implode("
-", $lines));
+        $entries = array_slice($entries, 0, 10);
+        $this->SetBuffer('LastActionLog', json_encode($entries));
+        $this->SetValue('LastAction', $this->RenderLastActionHtml($entries));
         $this->SetValue('DecisionText', $message);
         IPS_LogMessage('IRR[' . $this->InstanceID . ']', $message);
         $this->Debug('WriteLog', $message);
+    }
+
+    private function RenderLastActionHtml(array $entries): string
+    {
+        if (count($entries) === 0) {
+            return '';
+        }
+
+        $html = '<div style="font-family:Tahoma, Arial, sans-serif; font-size:12px; line-height:1.35; text-align:right;">';
+
+        foreach ($entries as $entry) {
+            $time = isset($entry['time']) ? htmlspecialchars((string) $entry['time'], ENT_QUOTES, 'UTF-8') : '';
+            $message = isset($entry['message']) ? htmlspecialchars((string) $entry['message'], ENT_QUOTES, 'UTF-8') : '';
+
+            $html .= '<div style="margin-bottom:2px; padding:1px 0;">';
+            $html .= '<span style="color:#4da6ff; font-weight:bold;">' . $time . '</span>';
+            $html .= '<span style="color:#ffffff;"> &ndash; ' . $message . '</span>';
+            $html .= '</div>';
+        }
+
+        $html .= '</div>';
+        return $html;
+    }
+
+    private function RenderZoneOverviewHtml(array $parts): string
+    {
+        $html = '<div style="font-family:Tahoma, Arial, sans-serif; font-size:12px; line-height:1.35; text-align:right;">';
+
+        if (count($parts) === 0) {
+            $html .= '<span style="color:#ffffff;">Keine Kreise unter dieser Master-Instanz gefunden</span>';
+            $html .= '</div>';
+            return $html;
+        }
+
+        foreach ($parts as $part) {
+            $part = (string) $part;
+            $id = '';
+            $label = $part;
+
+            if (preg_match('/^(.*)\s+\(#(\d+)\)$/', $part, $matches) === 1) {
+                $label = trim($matches[1]);
+                $id = $matches[2];
+            }
+
+            $html .= '<div style="margin-bottom:2px; padding:1px 0;">';
+            if ($id !== '') {
+                $html .= '<span style="color:#4da6ff; font-weight:bold;">#' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . '</span>';
+                $html .= '<span style="color:#ffffff;"> &ndash; ' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</span>';
+            } else {
+                $html .= '<span style="color:#ffffff;">' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</span>';
+            }
+            $html .= '</div>';
+        }
+
+        $html .= '</div>';
+        return $html;
     }
 
     private function Debug(string $Message, $Data = null): void
