@@ -47,7 +47,7 @@ class IrrigationController extends IPSModule
         $this->RegisterVariableInteger('CurrentZone', 'Aktueller Kreis', '', 70);
         $this->RegisterVariableInteger('QueueCount', 'Wartende Kreise', '', 80);
         $this->RegisterVariableString('DecisionText', 'Sequenzstatus', '', 90);
-        $this->RegisterVariableString('LastAction', 'Letzte 4 Aktionen', '~HTMLBox', 100);
+        $this->RegisterVariableString('LastAction', 'Letzte 10 Aktionen', '~HTMLBox', 100);
         $this->RegisterVariableString('ZoneOverview', 'Kreisübersicht', '~HTMLBox', 110);
 
         $this->RegisterTimer('StartCurrentZoneAfterPumpTimer', 0, 'IRR_StartCurrentZoneAfterPumpLead($_IPS[\'TARGET\']);');
@@ -925,7 +925,7 @@ class IrrigationController extends IPSModule
             'message' => $message
         ]);
 
-        $entries = array_slice($entries, 0, 4);
+        $entries = array_slice($entries, 0, 10);
         $this->SetBuffer('LastActionLog', json_encode($entries));
         $this->SetValue('LastAction', $this->RenderLastActionHtml($entries));
         $this->SetValue('DecisionText', $message);
