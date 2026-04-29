@@ -7,8 +7,7 @@
         {
           "name": "Enabled",
           "type": "CheckBox",
-          "caption": "Kreis aktiv",
-          "onChange": "IPS_SetProperty($id, \"Enabled\", $Enabled); IPS_ApplyChanges($id);"
+          "caption": "Kreis aktiv"
         },
         {
           "name": "ZoneNumber",
@@ -18,20 +17,17 @@
         {
           "name": "Duration",
           "type": "NumberSpinner",
-          "caption": "Beregnungsdauer (Minuten)",
-          "visible": "$Enabled"
+          "caption": "Beregnungsdauer (Minuten)"
         },
         {
           "name": "MoistureThreshold",
           "type": "NumberSpinner",
-          "caption": "Feuchteschwelle (%)",
-          "visible": "$Enabled"
+          "caption": "Feuchteschwelle (%)"
         },
         {
           "name": "MoistureMode",
           "type": "Select",
           "caption": "Feuchteauswertung",
-          "visible": "$Enabled",
           "options": [
             { "caption": "Niedrigster Feuchtigkeitswert", "value": 0 },
             { "caption": "Durchschnitt der Sensoren", "value": 1 }
@@ -42,7 +38,6 @@
     {
       "type": "ExpansionPanel",
       "caption": "Sensoren",
-      "visible": "$Enabled",
       "items": [
         {
           "name": "MoistureSensor1",
@@ -69,7 +64,6 @@
     {
       "type": "ExpansionPanel",
       "caption": "Aktoren",
-      "visible": "$Enabled",
       "items": [
         {
           "name": "Actuator1Instance",
@@ -97,25 +91,21 @@
     {
       "type": "Button",
       "caption": "Werte aktualisieren",
-      "visible": "$Enabled",
       "onClick": "IRRZ_RefreshValues($id);"
     },
     {
       "type": "Button",
       "caption": "Automatikentscheidung prüfen",
-      "visible": "$Enabled",
       "onClick": "IRRZ_Evaluate($id);"
     },
     {
       "type": "Button",
       "caption": "Kreis manuell starten",
-      "visible": "$Enabled",
       "onClick": "IRRZ_StartZone($id);"
     },
     {
       "type": "Button",
       "caption": "Kreis stoppen",
-      "visible": "$Enabled",
       "onClick": "IRRZ_StopZone($id);"
     }
   ],

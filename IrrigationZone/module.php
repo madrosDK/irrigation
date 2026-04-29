@@ -114,6 +114,7 @@ class IrrigationZone extends IPSModule
 
         $this->RegisterSourceMessages();
         $this->RefreshValues();
+        $this->UpdateVariableVisibility();
         $this->UpdateStatus();
 
         $this->Debug('ApplyChanges.Properties', [
@@ -144,6 +145,7 @@ class IrrigationZone extends IPSModule
             case 'Enabled':
                 IPS_SetProperty($this->InstanceID, 'Enabled', (bool) $Value);
                 IPS_ApplyChanges($this->InstanceID);
+                $this->UpdateVariableVisibility();
                 break;
 
             case 'DurationMinutes':
@@ -175,6 +177,44 @@ class IrrigationZone extends IPSModule
 
             default:
                 throw new Exception('Unbekannte Aktion: ' . $Ident);
+        }
+    }
+
+    private function UpdateVariableVisibility(): void
+    {
+        $enabled = $this->ReadPropertyBoolean('Enabled');
+
+        $alwaysVisible = [
+            'Enabled',
+            'ZoneNumber'
+        ];
+
+        $allVariables = [
+            'Enabled',
+            'ZoneNumber',
+            'DurationMinutes',
+            'MoistureThresholdValue',
+            'MoistureModeValue',
+            'Actuator1Active',
+            'Actuator2Active',
+            'ZoneActive',
+            'MoistureSensor1Value',
+            'MoistureSensor2Value',
+            'RainLast24hValue',
+            'ComputedMoisture',
+            'ShouldWater',
+            'DecisionText',
+            'LastAction'
+        ];
+
+        foreach ($allVariables as $ident) {
+            $id = @$this->GetIDForIdent($ident);
+            if ($id <= 0 || !@IPS_ObjectExists($id)) {
+                continue;
+            }
+
+            $hide = !$enabled && !in_array($ident, $alwaysVisible, true);
+            IPS_SetHidden($id, $hide);
         }
     }
 
