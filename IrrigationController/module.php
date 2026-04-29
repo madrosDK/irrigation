@@ -416,11 +416,18 @@ class IrrigationController extends IPSModule
         $this->SetValue('CurrentZone', @IRRZ_GetZoneNumber($zoneID));
         $this->SetValue('QueueCount', count($queue));
 
-        $this->WriteLog('Bereite Kreis ' . @IRRZ_GetZoneNumber($zoneID) . ' vor: Pumpe EIN, danach Vorlauf');
-        $this->SetPumpState(true);
+        $isFirstZone = !$this->GetValue('PumpActive');
 
-        $leadMs = max(0, $this->ReadPropertyInteger('PumpLeadTimeSeconds')) * 1000;
-        $this->SetTimerInterval('StartCurrentZoneAfterPumpTimer', max(100, $leadMs));
+        if ($isFirstZone) {
+            $this->WriteLog('Bereite Kreis ' . @IRRZ_GetZoneNumber($zoneID) . ' vor: Pumpe EIN, danach Vorlauf');
+            $this->SetPumpState(true);
+
+            $leadMs = max(0, $this->ReadPropertyInteger('PumpLeadTimeSeconds')) * 1000;
+            $this->SetTimerInterval('StartCurrentZoneAfterPumpTimer', max(100, $leadMs));
+        } else {
+            $this->WriteLog('Starte nächsten Kreis ' . @IRRZ_GetZoneNumber($zoneID) . ' nach Pause');
+            $this->SetTimerInterval('StartCurrentZoneAfterPumpTimer', 100);
+        }
     }
 
     public function StartCurrentZoneAfterPumpLead(): void
