@@ -932,7 +932,7 @@ class IrrigationController extends IPSModule
             return '';
         }
 
-        $html = '<div style="font-family:Tahoma, Arial, sans-serif; font-size:10px; line-height:1.35; text-align:right;">';
+        $html = '<div style="font-family:Tahoma, Arial, sans-serif; font-size:12px; line-height:1.35; text-align:right;">';
 
         foreach ($entries as $entry) {
             $time = isset($entry['time']) ? htmlspecialchars((string) $entry['time'], ENT_QUOTES, 'UTF-8') : '';
