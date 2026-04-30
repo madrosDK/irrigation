@@ -460,7 +460,9 @@ class IrrigationArea extends IPSModule
             foreach ($parts as $part) {
                 $part = (string)$part;
 
-                // Erwartet z.B.: "Kreis 1 (#12345)" oder "Kreis 1 - Vorgarten (#12345)"
+                // Erwartet z.B.:
+                // "Kreis 1 (#12345)"
+                // "Kreis 1 - Vorgarten (#12345)"
                 $id = '';
                 $name = $part;
 
@@ -473,9 +475,8 @@ class IrrigationArea extends IPSModule
                 }
 
                 $html .= '<div>';
-                $html .= '<span style="color:' . $accentColor . ';">' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . ' .....</span> ';
-                $html .= '<span style="color:' . $textColor . ';">|</span> ';
-                $html .= '<span style="color:' . $textColor . ';">' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '</span>';
+                $html .= '<span style="color:' . $accentColor . ';">ID ' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . '</span>';
+                $html .= '<span style="color:' . $textColor . ';"> | ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '</span>';
                 $html .= '</div>';
             }
         }
