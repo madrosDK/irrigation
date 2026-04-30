@@ -1,0 +1,14 @@
+{
+  "id": "{C6A0D3B7-3E8B-4B74-9F1D-7E5F1D5A9A21}",
+  "name": "Irrigation Area",
+  "type": 3,
+  "vendor": "madrosDK",
+  "aliases": [
+    "Bewässerungszone"
+  ],
+  "parentRequirements": [],
+  "childRequirements": [],
+  "implemented": [],
+  "prefix": "IRRA",
+  "url": "https://github.com/madrosDK/irrigation"
+}
