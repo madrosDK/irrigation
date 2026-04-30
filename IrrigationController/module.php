@@ -268,6 +268,8 @@ class IrrigationController extends IPSModule
         $this->SetAreaQueue($queue);
         $this->SetBuffer('CurrentAreaID', (string)$areaID);
 
+        $this->RecalculatePlannedEnd();
+
         if (!@IPS_InstanceExists($areaID)) {
             $this->WriteLog('Zone existiert nicht mehr - überspringe');
             $this->SetTimerInterval('StartNextAreaTimer', 100);
@@ -282,6 +284,58 @@ class IrrigationController extends IPSModule
         @IRRA_StartArea($areaID, true);
     }
 
+    private function RecalculatePlannedEnd(): void
+    {
+        if (!$this->GetValue('SequenceActive')) {
+            $this->SetBuffer('PlannedEndTime', '0');
+            $this->UpdateEstimatedEnd();
+            return;
+        }
+
+        $totalSeconds = 0;
+
+        $currentAreaID = (int)$this->GetBuffer('CurrentAreaID');
+
+        // Aktuelle Zone nur grob mitrechnen, wenn sie läuft.
+        // Exakte Restzeit der laufenden Zone wäre ein weiterer Ausbauschritt.
+        if ($currentAreaID > 0 && @IPS_InstanceExists($currentAreaID) && function_exists('IRRA_GetPlannedDurationSeconds')) {
+            $totalSeconds += (int)@IRRA_GetPlannedDurationSeconds($currentAreaID, false);
+        }
+
+        $queue = $this->GetAreaQueue();
+
+        foreach ($queue as $areaID) {
+            if ($areaID <= 0 || !@IPS_InstanceExists($areaID)) {
+                continue;
+            }
+
+            if (function_exists('IRRA_GetPlannedDurationSeconds')) {
+                $duration = (int)@IRRA_GetPlannedDurationSeconds($areaID, false);
+                if ($duration > 0) {
+                    $totalSeconds += $duration;
+                }
+            }
+        }
+
+        // Pausen zwischen wartenden Zonen
+        $areaCount = count($queue);
+        if ($currentAreaID > 0) {
+            $areaCount++;
+        }
+
+        if ($areaCount > 1) {
+            $totalSeconds += ($areaCount - 1) * max(0, $this->ReadPropertyInteger('PauseBetweenZonesSeconds'));
+        }
+
+        if ($totalSeconds <= 0) {
+            $this->SetBuffer('PlannedEndTime', '0');
+        } else {
+            $this->SetBuffer('PlannedEndTime', (string)(time() + $totalSeconds));
+        }
+
+        $this->UpdateEstimatedEnd();
+    }
+
     public function FinishCurrentArea(): void
     {
         $currentAreaID = (int)$this->GetBuffer('CurrentAreaID');
@@ -291,7 +345,7 @@ class IrrigationController extends IPSModule
         }
 
         $this->SetBuffer('CurrentAreaID', '0');
-        $this->UpdateEstimatedEnd();
+        $this->RecalculatePlannedEnd();
 
         $queue = $this->GetAreaQueue();
         if (count($queue) === 0) {
@@ -465,7 +519,7 @@ class IrrigationController extends IPSModule
         $queue = array_values(array_map('intval', $queue));
         $this->SetBuffer('AreaQueue', json_encode($queue));
         $this->SetValue('QueueCount', count($queue));
-        $this->UpdateEstimatedEnd();
+        $this->RecalculatePlannedEnd();
     }
 
     private function UpdateStatus(): void
@@ -739,13 +793,7 @@ class IrrigationController extends IPSModule
         $queue[] = $areaID;
         $this->SetAreaQueue($queue);
 
-        $plannedEnd = (int)$this->GetBuffer('PlannedEndTime');
-        if ($plannedEnd <= time()) {
-            $plannedEnd = time();
-        }
-
-        $plannedEnd += max(0, $this->ReadPropertyInteger('PauseBetweenZonesSeconds')) + $durationSeconds;
-        $this->SetBuffer('PlannedEndTime', (string)$plannedEnd);
+        $this->RecalculatePlannedEnd();
 
         $this->WriteLog('Zone ' . $this->GetAreaNumberSafe($areaID) . ' hinten angehängt');
         $this->UpdateEstimatedEnd();
