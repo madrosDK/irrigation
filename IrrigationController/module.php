@@ -107,17 +107,13 @@ class IrrigationController extends IPSModule
                 IPS_ApplyChanges($this->InstanceID);
                 break;
 
-            case 'SequenceActive':
-                if ((bool)$Value) {
-                    if ($this->GetValue('Mode') === self::MODE_AUTO) {
-                        $this->StartAutomaticSequence();
-                    } else {
+                case 'SequenceActive':
+                    if ((bool)$Value) {
                         $this->StartManualSequence();
+                    } else {
+                        $this->StopSequence();
                     }
-                } else {
-                    $this->StopSequence();
-                }
-                break;
+                    break;
 
             default:
                 throw new Exception('Unbekannte Aktion: ' . $Ident);
