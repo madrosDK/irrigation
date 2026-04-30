@@ -1,0 +1,19 @@
+{
+  "elements": [
+    {
+      "type": "ExpansionPanel",
+      "caption": "Zone",
+      "items": [
+        { "name": "Enabled", "type": "CheckBox", "caption": "Zone aktiv" },
+        { "name": "AreaNumber", "type": "NumberSpinner", "caption": "Zonennummer" }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "type": "Button",
+      "caption": "Neuen Kreis anlegen",
+      "onClick": "IRRA_CreateZone($id);"
+    }
+  ]
+}
