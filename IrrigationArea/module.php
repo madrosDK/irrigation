@@ -75,6 +75,7 @@ class IrrigationArea extends IPSModule
         if ($lastActionID !== false) {
             IPS_SetHidden($lastActionID, true);
         }
+        $this->UpdateVariableVisibility();
     }
 
     public function GetConfigurationForm()
@@ -88,6 +89,7 @@ class IrrigationArea extends IPSModule
             case 'Enabled':
                 IPS_SetProperty($this->InstanceID, 'Enabled', (bool)$Value);
                 IPS_ApplyChanges($this->InstanceID);
+                $this->UpdateVariableVisibility();
                 break;
             case 'Mode':
                 $mode = (int)$Value;
@@ -153,6 +155,66 @@ class IrrigationArea extends IPSModule
         IPS_ApplyChanges($zoneID);
         $this->RefreshZones();
         $this->WriteLog('Kreis ' . $number . ' angelegt');
+    }
+
+    private function UpdateVariableVisibility(): void
+    {
+        $enabled = $this->ReadPropertyBoolean('Enabled');
+
+        $alwaysVisible = [
+            'Enabled',
+            'AreaNumber'
+        ];
+
+        $areaVariables = [
+            'Enabled',
+            'AreaNumber',
+            'Mode',
+            'PauseBetweenZonesSeconds',
+            'AreaActive',
+            'CurrentZone',
+            'QueueCount',
+            'DecisionText',
+            'LastAction',
+            'ZoneOverview'
+        ];
+
+        foreach ($areaVariables as $ident) {
+            $id = @$this->GetIDForIdent($ident);
+            if ($id === false || $id <= 0 || !@IPS_ObjectExists($id)) {
+                continue;
+            }
+
+            $hide = !$enabled && !in_array($ident, $alwaysVisible, true);
+
+            // LastAction bleibt generell ausgeblendet, weil Historie nur im Master sein soll
+            if ($ident === 'LastAction') {
+                $hide = true;
+            }
+
+            IPS_SetHidden($id, $hide);
+        }
+
+        foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
+            if (!@IPS_ObjectExists($childID)) {
+                continue;
+            }
+
+            // Kreise komplett ausblenden, wenn Zone deaktiviert ist
+            if (@IPS_InstanceExists($childID)) {
+                IPS_SetHidden($childID, !$enabled);
+            }
+        }
+
+        $timerID = @$this->GetIDForIdent('ScheduleTimer');
+        if ($timerID !== false && @IPS_ObjectExists($timerID)) {
+            IPS_SetHidden($timerID, !$enabled || $this->ReadPropertyInteger('Mode') !== self::MODE_TIME);
+        }
+
+        $autoID = @$this->GetIDForIdent('ScheduleAuto');
+        if ($autoID !== false && @IPS_ObjectExists($autoID)) {
+            IPS_SetHidden($autoID, !$enabled || $this->ReadPropertyInteger('Mode') !== self::MODE_AUTO);
+        }
     }
 
     public function RefreshZones(): void
@@ -547,15 +609,16 @@ class IrrigationArea extends IPSModule
     private function UpdateWeekplanVisibility(): void
     {
         $mode = $this->ReadPropertyInteger('Mode');
+        $enabled = $this->ReadPropertyBoolean('Enabled');
 
         $timerID = @$this->GetIDForIdent('ScheduleTimer');
         if ($timerID !== false) {
-            IPS_SetHidden($timerID, $mode !== self::MODE_TIME);
+            IPS_SetHidden($timerID, !$enabled || $mode !== self::MODE_TIME);
         }
 
         $autoID = @$this->GetIDForIdent('ScheduleAuto');
         if ($autoID !== false) {
-            IPS_SetHidden($autoID, $mode !== self::MODE_AUTO);
+            IPS_SetHidden($autoID, !$enabled || $mode !== self::MODE_AUTO);
         }
     }
 
