@@ -28,6 +28,32 @@
     },
     {
       "type": "ExpansionPanel",
+      "caption": "Darstellung",
+      "items": [
+        {
+          "name": "HtmlFontFamily",
+          "type": "ValidationTextBox",
+          "caption": "Schriftart"
+        },
+        {
+          "name": "HtmlFontSize",
+          "type": "NumberSpinner",
+          "caption": "Schriftgröße (px)"
+        },
+        {
+          "name": "HtmlAccentColor",
+          "type": "ValidationTextBox",
+          "caption": "Akzentfarbe / Blau"
+        },
+        {
+          "name": "HtmlTextColor",
+          "type": "ValidationTextBox",
+          "caption": "Textfarbe"
+        }
+      ]
+    },
+    {
+      "type": "ExpansionPanel",
       "caption": "Pumpe",
       "items": [
         {
