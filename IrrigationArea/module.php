@@ -43,6 +43,13 @@ class IrrigationArea extends IPSModule
                 IPS_SetProperty($this->InstanceID, 'Enabled', (bool)$Value);
                 IPS_ApplyChanges($this->InstanceID);
                 break;
+
+            case 'CreateZone':
+                $this->CreateZone();
+                break;
+
+            default:
+                throw new Exception('Unbekannte Aktion: ' . $Ident);
         }
     }
 
@@ -54,12 +61,8 @@ class IrrigationArea extends IPSModule
         $zoneID = IPS_CreateInstance(self::MODULE_ID_ZONE);
         IPS_SetParent($zoneID, $this->InstanceID);
         IPS_SetName($zoneID, 'Kreis ' . $number);
+        IPS_SetPosition($zoneID, 1000 + $number);
         IPS_SetProperty($zoneID, 'ZoneNumber', $number);
         IPS_ApplyChanges($zoneID);
     }
-}
-
-function IRRA_CreateZone($id)
-{
-    IPS_RequestAction($id, 'CreateZone', true);
 }
