@@ -187,7 +187,6 @@ class IrrigationArea extends IPSModule
 
             $hide = !$enabled && !in_array($ident, $alwaysVisible, true);
 
-            // LastAction bleibt generell ausgeblendet, weil Historie nur im Master sein soll
             if ($ident === 'LastAction') {
                 $hide = true;
             }
@@ -200,7 +199,6 @@ class IrrigationArea extends IPSModule
                 continue;
             }
 
-            // Kreise komplett ausblenden, wenn Zone deaktiviert ist
             if (@IPS_InstanceExists($childID)) {
                 IPS_SetHidden($childID, !$enabled);
             }
@@ -376,7 +374,6 @@ class IrrigationArea extends IPSModule
                 continue;
             }
 
-            // Andere aktive Area sperrt
             if ($areaID !== $this->InstanceID) {
                 $areaActiveID = @IPS_GetObjectIDByIdent('AreaActive', $areaID);
                 if ($areaActiveID !== false && $areaActiveID > 0 && @IPS_VariableExists($areaActiveID)) {
@@ -386,7 +383,6 @@ class IrrigationArea extends IPSModule
                 }
             }
 
-            // Jeder aktive Kreis in jeder Area sperrt
             foreach (IPS_GetChildrenIDs($areaID) as $zoneID) {
                 if (!@IPS_InstanceExists($zoneID)) {
                     continue;
@@ -587,39 +583,32 @@ class IrrigationArea extends IPSModule
         $this->StartArea(false);
     }
 
-    private function MaintainWeekplan(string $ident, string $name): void
+    private function MaintainWeekplan(string $Ident, string $Name): void
     {
-        $eid = @$this->GetIDForIdent($ident);
+        $eventID = @IPS_GetObjectIDByIdent($Ident, $this->InstanceID);
+        if ($eventID === false) {
+            $eventID = IPS_CreateEvent(2);
+            IPS_SetParent($eventID, $this->InstanceID);
+            IPS_SetIdent($eventID, $Ident);
+            IPS_SetName($eventID, $Name);
 
-        if ($eid === false) {
-            $eid = IPS_CreateEvent(2); // Wochenplan
-            IPS_SetParent($eid, $this->InstanceID);
-            IPS_SetIdent($eid, $ident);
-            IPS_SetName($eid, $name);
-        }
-
-        IPS_SetEventScheduleAction($eid, 0, 'Inaktiv', 0x808080, '');
-        IPS_SetEventScheduleAction($eid, 1, 'Aktiv', 0x00FF00, '');
-
-        // Mo–So aktivierbar
-        try {
-            IPS_SetEventScheduleGroup($eid, 0, 127);
-        } catch (Throwable $e) {
-            try {
-                IPS_SetEventScheduleGroup($eid, 0, 0, 127);
-            } catch (Throwable $e2) {
-                IPS_LogMessage('IRRA[' . $this->InstanceID . ']', 'Wochenplan-Gruppe konnte nicht gesetzt werden: ' . $e2->getMessage());
+            for ($day = 0; $day <= 6; $day++) {
+                @IPS_SetEventScheduleGroup($eventID, $day, 1 << $day);
             }
+
+            IPS_SetEventActive($eventID, false);
         }
 
-        $handler = ($ident === 'ScheduleAuto') ? 'HandleScheduleAuto' : 'HandleScheduleTimer';
+        if (@IPS_GetParent($eventID) !== $this->InstanceID) {
+            @IPS_SetParent($eventID, $this->InstanceID);
+        }
 
-        IPS_SetEventScript(
-            $eid,
-            'if ($_IPS[\'ACTION\'] == 1) { IRRA_' . $handler . '($_IPS[\'TARGET\'], $_IPS[\'VALUE\']); }'
-        );
+        @IPS_SetEventScheduleAction($eventID, 0, 'Aus', 0x808080, '');
 
-        IPS_SetEventActive($eid, true);
+        $script = 'IRRA_StartArea(' . $this->InstanceID . ');';
+        @IPS_SetEventScheduleAction($eventID, 1, 'Ein', 0x27AE60, $script);
+
+        @IPS_SetEventScript($eventID, '');
     }
 
     private function UpdateWeekplanVisibility(): void
