@@ -592,18 +592,27 @@ class IrrigationArea extends IPSModule
         $eid = @$this->GetIDForIdent($ident);
 
         if ($eid === false) {
-            $eid = IPS_CreateEvent(2);
+            $eid = IPS_CreateEvent(2); // Wochenplan
             IPS_SetParent($eid, $this->InstanceID);
             IPS_SetIdent($eid, $ident);
             IPS_SetName($eid, $name);
-            IPS_SetEventActive($eid, false);
         }
+    
+        // Wochenplan-Aktionen setzen:
+        // 0 = Aus / keine Aktion
+        // 1 = Ein / Bewässerung starten
+        IPS_SetEventScheduleGroup($eid, 0, 0);
+        IPS_SetEventScheduleAction($eid, 0, 0, 'Aus', 0x808080, '');
+        IPS_SetEventScheduleAction($eid, 1, 1, 'Ein', 0x00FF00, '');
 
         $handler = ($ident === 'ScheduleAuto') ? 'HandleScheduleAuto' : 'HandleScheduleTimer';
+
         IPS_SetEventScript(
             $eid,
             'if ($_IPS[\'ACTION\'] == 1) { IRRA_' . $handler . '($_IPS[\'TARGET\'], $_IPS[\'VALUE\']); }'
         );
+
+        IPS_SetEventActive($eid, true);
     }
 
     private function UpdateWeekplanVisibility(): void
