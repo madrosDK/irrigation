@@ -42,6 +42,7 @@ class IrrigationArea extends IPSModule
         $this->SetBuffer('Queue', json_encode([]));
         $this->SetBuffer('CurrentZoneID', '0');
         $this->SetBuffer('LastActionLog', json_encode([]));
+        $this->SetBuffer('StartedFromMaster', '0');
     }
 
     public function ApplyChanges()
@@ -80,7 +81,6 @@ class IrrigationArea extends IPSModule
                 IPS_SetProperty($this->InstanceID, 'Enabled', (bool)$Value);
                 IPS_ApplyChanges($this->InstanceID);
                 break;
-
             case 'Mode':
                 $mode = (int)$Value;
                 if (!in_array($mode, [self::MODE_MANUAL, self::MODE_TIME, self::MODE_AUTO], true)) {
@@ -89,12 +89,10 @@ class IrrigationArea extends IPSModule
                 IPS_SetProperty($this->InstanceID, 'Mode', $mode);
                 IPS_ApplyChanges($this->InstanceID);
                 break;
-
             case 'PauseBetweenZonesSeconds':
                 IPS_SetProperty($this->InstanceID, 'PauseBetweenZonesSeconds', max(0, (int)$Value));
                 IPS_ApplyChanges($this->InstanceID);
                 break;
-
             case 'AreaActive':
                 if ((bool)$Value) {
                     $this->StartArea(false);
@@ -102,11 +100,9 @@ class IrrigationArea extends IPSModule
                     $this->StopArea(false);
                 }
                 break;
-
             case 'CreateZone':
                 $this->CreateZone();
                 break;
-
             default:
                 throw new Exception('Unbekannte Aktion: ' . $Ident);
         }
@@ -116,12 +112,10 @@ class IrrigationArea extends IPSModule
     {
         $zones = $this->GetZones();
         $maxZones = max(1, min(10, $this->ReadPropertyInteger('MaxZones')));
-
         if (count($zones) >= $maxZones) {
             $this->WriteLog('Maximale Kreisanzahl erreicht');
             return;
         }
-
         $used = [];
         foreach ($zones as $zoneID) {
             $number = $this->GetZoneNumberSafe($zoneID);
@@ -129,24 +123,20 @@ class IrrigationArea extends IPSModule
                 $used[] = $number;
             }
         }
-
         $number = 1;
         while (in_array($number, $used, true) && $number <= $maxZones) {
             $number++;
         }
-
         if ($number > $maxZones) {
             $this->WriteLog('Keine freie Kreisnummer gefunden');
             return;
         }
-
         $zoneID = IPS_CreateInstance(self::MODULE_ID_ZONE);
         IPS_SetParent($zoneID, $this->InstanceID);
         IPS_SetName($zoneID, 'Kreis ' . $number);
         IPS_SetPosition($zoneID, 1000 + $number);
         IPS_SetProperty($zoneID, 'ZoneNumber', $number);
         IPS_ApplyChanges($zoneID);
-
         $this->RefreshZones();
         $this->WriteLog('Kreis ' . $number . ' angelegt');
     }
@@ -155,22 +145,15 @@ class IrrigationArea extends IPSModule
     {
         $zones = $this->GetZones();
         $parts = [];
-
         foreach ($zones as $zoneID) {
             $number = $this->GetZoneNumberSafe($zoneID);
             if ($number > 0) {
                 @IPS_SetPosition($zoneID, 1000 + $number);
             }
-
             $name = @IPS_GetName($zoneID);
             $standardName = 'Kreis ' . $number;
-            if ($name === $standardName || $name === '') {
-                $parts[] = 'Kreis ' . $number . ' (#' . $zoneID . ')';
-            } else {
-                $parts[] = 'Kreis ' . $number . ' - ' . $name . ' (#' . $zoneID . ')';
-            }
+            $parts[] = ($name === $standardName || $name === '') ? 'Kreis ' . $number . ' (#' . $zoneID . ')' : 'Kreis ' . $number . ' - ' . $name . ' (#' . $zoneID . ')';
         }
-
         $this->SetValue('ZoneOverview', $this->RenderOverviewHtml($parts, 'Keine Kreise in dieser Zone gefunden'));
         $this->SetValue('QueueCount', count($this->GetQueue()));
         $this->UpdateStatus();
@@ -178,26 +161,25 @@ class IrrigationArea extends IPSModule
 
     public function StartArea(bool $FromMaster = false): void
     {
+        $this->SetBuffer('StartedFromMaster', $FromMaster ? '1' : '0');
         if (!$this->ReadPropertyBoolean('Enabled')) {
             $this->WriteLog('Zone deaktiviert - Start ignoriert');
+            if ($FromMaster) { $this->NotifyMasterFinished(); }
             return;
         }
-
         if ($this->GetValue('AreaActive')) {
             $this->WriteLog('Zone läuft bereits - Start ignoriert');
             return;
         }
-
         $automatic = $this->ReadPropertyInteger('Mode') === self::MODE_AUTO;
         $zones = $this->GetRunnableZones($automatic);
-
         if (count($zones) === 0) {
             $this->WriteLog('Keine Kreise zum Bewässern');
             $this->SetValue('AreaActive', false);
             $this->SetQueue([]);
+            if ($FromMaster) { $this->NotifyMasterFinished(); }
             return;
         }
-
         $this->SetQueue($zones);
         $this->SetBuffer('CurrentZoneID', '0');
         $this->SetValue('AreaActive', true);
@@ -211,14 +193,13 @@ class IrrigationArea extends IPSModule
     {
         $this->SetTimerInterval('StartNextZoneTimer', 0);
         $this->SetTimerInterval('StopCurrentZoneTimer', 0);
-
         $currentZoneID = (int)$this->GetBuffer('CurrentZoneID');
         if ($currentZoneID > 0 && @IPS_InstanceExists($currentZoneID)) {
             @IRRZ_StopZone($currentZoneID, true);
         }
-
         $this->SetQueue([]);
         $this->SetBuffer('CurrentZoneID', '0');
+        $this->SetBuffer('StartedFromMaster', '0');
         $this->SetValue('AreaActive', false);
         $this->SetValue('CurrentZone', 0);
         $this->SetValue('QueueCount', 0);
@@ -228,23 +209,19 @@ class IrrigationArea extends IPSModule
     public function StartNextZone(): void
     {
         $this->SetTimerInterval('StartNextZoneTimer', 0);
-
         $queue = $this->GetQueue();
         if (count($queue) === 0) {
             $this->FinishArea();
             return;
         }
-
         $zoneID = array_shift($queue);
         $this->SetQueue($queue);
         $this->SetBuffer('CurrentZoneID', (string)$zoneID);
-
         if (!@IPS_InstanceExists($zoneID)) {
             $this->WriteLog('Kreis existiert nicht mehr - überspringe');
             $this->SetTimerInterval('StartNextZoneTimer', 100);
             return;
         }
-
         $duration = $this->GetDurationMinutesSafe($zoneID);
         $number = $this->GetZoneNumberSafe($zoneID);
         if ($duration <= 0) {
@@ -252,7 +229,6 @@ class IrrigationArea extends IPSModule
             $this->SetTimerInterval('StartNextZoneTimer', 100);
             return;
         }
-
         $this->SetValue('CurrentZone', $number);
         $this->SetValue('QueueCount', count($queue));
         $this->WriteLog('Starte Kreis ' . $number . ' für ' . $duration . ' Minute(n)');
@@ -263,70 +239,61 @@ class IrrigationArea extends IPSModule
     public function FinishCurrentZone(): void
     {
         $this->SetTimerInterval('StopCurrentZoneTimer', 0);
-
         $currentZoneID = (int)$this->GetBuffer('CurrentZoneID');
         if ($currentZoneID > 0 && @IPS_InstanceExists($currentZoneID)) {
             @IRRZ_StopZone($currentZoneID, true);
             $this->WriteLog('Kreis ' . $this->GetZoneNumberSafe($currentZoneID) . ' beendet');
         }
-
         $this->SetBuffer('CurrentZoneID', '0');
-
         $queue = $this->GetQueue();
         if (count($queue) === 0) {
             $this->FinishArea();
             return;
         }
-
         $pauseSeconds = max(0, $this->ReadPropertyInteger('PauseBetweenZonesSeconds'));
         $this->SetTimerInterval('StartNextZoneTimer', max(100, $pauseSeconds * 1000));
     }
 
     private function FinishArea(): void
     {
+        $fromMaster = $this->GetBuffer('StartedFromMaster') === '1';
         $this->SetTimerInterval('StartNextZoneTimer', 0);
         $this->SetTimerInterval('StopCurrentZoneTimer', 0);
         $this->SetQueue([]);
         $this->SetBuffer('CurrentZoneID', '0');
+        $this->SetBuffer('StartedFromMaster', '0');
         $this->SetValue('AreaActive', false);
         $this->SetValue('CurrentZone', 0);
         $this->SetValue('QueueCount', 0);
         $this->WriteLog('Zone abgeschlossen');
+        if ($fromMaster) {
+            $this->NotifyMasterFinished();
+        }
     }
 
-    public function IsEnabled(): bool
+    private function NotifyMasterFinished(): void
     {
-        return $this->ReadPropertyBoolean('Enabled');
+        $parentID = @IPS_GetParent($this->InstanceID);
+        if ($parentID > 0 && @IPS_InstanceExists($parentID) && function_exists('IRR_FinishCurrentArea')) {
+            @IRR_FinishCurrentArea($parentID);
+        }
     }
 
-    public function GetAreaNumber(): int
-    {
-        return $this->ReadPropertyInteger('AreaNumber');
-    }
+    public function IsEnabled(): bool { return $this->ReadPropertyBoolean('Enabled'); }
+    public function GetAreaNumber(): int { return $this->ReadPropertyInteger('AreaNumber'); }
 
     private function GetZones(): array
     {
         $maxZones = max(1, min(10, $this->ReadPropertyInteger('MaxZones')));
         $zones = [];
-
         foreach (IPS_GetChildrenIDs($this->InstanceID) as $childID) {
-            if (!@IPS_InstanceExists($childID)) {
-                continue;
-            }
-
+            if (!@IPS_InstanceExists($childID)) { continue; }
             $instance = IPS_GetInstance($childID);
-            if (strtoupper($instance['ModuleInfo']['ModuleID'] ?? '') !== strtoupper(self::MODULE_ID_ZONE)) {
-                continue;
-            }
-
+            if (strtoupper($instance['ModuleInfo']['ModuleID'] ?? '') !== strtoupper(self::MODULE_ID_ZONE)) { continue; }
             $number = $this->GetZoneNumberSafe($childID);
-            if ($number < 1 || $number > $maxZones) {
-                continue;
-            }
-
+            if ($number < 1 || $number > $maxZones) { continue; }
             $zones[$number . '_' . $childID] = $childID;
         }
-
         ksort($zones, SORT_NATURAL);
         return array_values($zones);
     }
@@ -335,17 +302,11 @@ class IrrigationArea extends IPSModule
     {
         $result = [];
         foreach ($this->GetZones() as $zoneID) {
-            if (function_exists('IRRZ_IsEnabled') && !@IRRZ_IsEnabled($zoneID)) {
-                continue;
-            }
-
+            if (function_exists('IRRZ_IsEnabled') && !@IRRZ_IsEnabled($zoneID)) { continue; }
             if ($automatic) {
                 @IRRZ_RefreshValues($zoneID);
-                if (function_exists('IRRZ_ShouldWater') && !@IRRZ_ShouldWater($zoneID)) {
-                    continue;
-                }
+                if (function_exists('IRRZ_ShouldWater') && !@IRRZ_ShouldWater($zoneID)) { continue; }
             }
-
             $result[] = $zoneID;
         }
         return $result;
@@ -354,10 +315,7 @@ class IrrigationArea extends IPSModule
     private function GetQueue(): array
     {
         $queue = json_decode($this->GetBuffer('Queue'), true);
-        if (!is_array($queue)) {
-            return [];
-        }
-        return array_values(array_map('intval', $queue));
+        return is_array($queue) ? array_values(array_map('intval', $queue)) : [];
     }
 
     private function SetQueue(array $queue): void
@@ -372,18 +330,13 @@ class IrrigationArea extends IPSModule
         try {
             if (function_exists('IRRZ_GetZoneNumber')) {
                 $number = @IRRZ_GetZoneNumber($zoneID);
-                if (is_int($number)) {
-                    return $number;
-                }
+                if (is_int($number)) { return $number; }
             }
             if (@IPS_InstanceExists($zoneID)) {
                 $number = @IPS_GetProperty($zoneID, 'ZoneNumber');
-                if (is_numeric($number)) {
-                    return (int)$number;
-                }
+                if (is_numeric($number)) { return (int)$number; }
             }
-        } catch (Throwable $e) {
-        }
+        } catch (Throwable $e) {}
         return 0;
     }
 
@@ -392,18 +345,13 @@ class IrrigationArea extends IPSModule
         try {
             if (function_exists('IRRZ_GetDurationMinutes')) {
                 $duration = @IRRZ_GetDurationMinutes($zoneID);
-                if (is_int($duration)) {
-                    return $duration;
-                }
+                if (is_int($duration)) { return $duration; }
             }
             if (@IPS_InstanceExists($zoneID)) {
                 $duration = @IPS_GetProperty($zoneID, 'Duration');
-                if (is_numeric($duration)) {
-                    return (int)$duration;
-                }
+                if (is_numeric($duration)) { return (int)$duration; }
             }
-        } catch (Throwable $e) {
-        }
+        } catch (Throwable $e) {}
         return 0;
     }
 
@@ -413,15 +361,9 @@ class IrrigationArea extends IPSModule
         $buffer = $this->GetBuffer('LastActionLog');
         if (is_string($buffer) && trim($buffer) !== '') {
             $decoded = json_decode($buffer, true);
-            if (is_array($decoded)) {
-                $entries = $decoded;
-            }
+            if (is_array($decoded)) { $entries = $decoded; }
         }
-
-        array_unshift($entries, [
-            'time' => date('d.m.Y H:i:s'),
-            'message' => $message
-        ]);
+        array_unshift($entries, ['time' => date('d.m.Y H:i:s'), 'message' => $message]);
         $entries = array_slice($entries, 0, 10);
         $this->SetBuffer('LastActionLog', json_encode($entries));
         $this->SetValue('LastAction', $this->RenderLastActionHtml($entries));
@@ -437,8 +379,7 @@ class IrrigationArea extends IPSModule
             $message = htmlspecialchars((string)($entry['message'] ?? ''), ENT_QUOTES, 'UTF-8');
             $html .= '<div><span style="color:#4da6ff; font-weight:bold;">' . $time . '</span><span style="color:#ffffff;"> &ndash; ' . $message . '</span></div>';
         }
-        $html .= '</div>';
-        return $html;
+        return $html . '</div>';
     }
 
     private function RenderOverviewHtml(array $parts, string $empty): string
@@ -447,20 +388,14 @@ class IrrigationArea extends IPSModule
         if (count($parts) === 0) {
             $html .= '<span style="color:#ffffff;">' . htmlspecialchars($empty, ENT_QUOTES, 'UTF-8') . '</span>';
         } else {
-            foreach ($parts as $part) {
-                $html .= '<div><span style="color:#ffffff;">' . htmlspecialchars((string)$part, ENT_QUOTES, 'UTF-8') . '</span></div>';
-            }
+            foreach ($parts as $part) { $html .= '<div><span style="color:#ffffff;">' . htmlspecialchars((string)$part, ENT_QUOTES, 'UTF-8') . '</span></div>'; }
         }
-        $html .= '</div>';
-        return $html;
+        return $html . '</div>';
     }
 
     private function UpdateStatus(): void
     {
-        if (!$this->ReadPropertyBoolean('Enabled')) {
-            $this->SetStatus(104);
-            return;
-        }
+        if (!$this->ReadPropertyBoolean('Enabled')) { $this->SetStatus(104); return; }
         $this->SetStatus(count($this->GetZones()) > 0 ? 102 : 200);
     }
 
