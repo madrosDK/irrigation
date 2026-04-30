@@ -11,6 +11,11 @@ class IrrigationController extends IPSModule
     {
         parent::Create();
 
+        $this->RegisterPropertyString('HtmlFontFamily', 'Tahoma');
+        $this->RegisterPropertyInteger('HtmlFontSize', 12);
+        $this->RegisterPropertyString('HtmlAccentColor', '#4da6ff');
+        $this->RegisterPropertyString('HtmlTextColor', '#ffffff');
+
         $this->RegisterPropertyInteger('PumpLeadTimeSeconds', 5);
         $this->RegisterPropertyInteger('PumpEarlyOffSeconds', 0);
         $this->RegisterPropertyInteger('PauseBetweenZonesSeconds', 5);
@@ -610,6 +615,16 @@ class IrrigationController extends IPSModule
     public function AddActionLog(string $message): void
     {
         $this->WriteLog($message);
+    }
+
+    public function GetHtmlStyle(): string
+    {
+        return json_encode([
+            'fontFamily' => $this->ReadPropertyString('HtmlFontFamily'),
+            'fontSize'   => $this->ReadPropertyInteger('HtmlFontSize'),
+            'accentColor'=> $this->ReadPropertyString('HtmlAccentColor'),
+            'textColor'  => $this->ReadPropertyString('HtmlTextColor')
+        ]);
     }
 
     private function WriteLog(string $message): void

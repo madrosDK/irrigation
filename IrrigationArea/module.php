@@ -445,12 +445,41 @@ class IrrigationArea extends IPSModule
 
     private function RenderOverviewHtml(array $parts, string $empty): string
     {
-        $html = '<div style="font-family:Tahoma, Arial, sans-serif; font-size:12px; line-height:1.35; text-align:right;">';
+        $style = $this->GetHtmlStyleFromMaster();
+
+        $fontFamily  = htmlspecialchars((string)($style['fontFamily'] ?? 'Tahoma'), ENT_QUOTES, 'UTF-8');
+        $fontSize    = (int)($style['fontSize'] ?? 12);
+        $accentColor = htmlspecialchars((string)($style['accentColor'] ?? '#4da6ff'), ENT_QUOTES, 'UTF-8');
+        $textColor   = htmlspecialchars((string)($style['textColor'] ?? '#ffffff'), ENT_QUOTES, 'UTF-8');
+
+        $html = '<div style="font-family:' . $fontFamily . ', Arial, sans-serif; font-size:' . $fontSize . 'px; line-height:1.35; text-align:right;">';
+
         if (count($parts) === 0) {
-            $html .= '<span style="color:#ffffff;">' . htmlspecialchars($empty, ENT_QUOTES, 'UTF-8') . '</span>';
+            $html .= '<span style="color:' . $textColor . ';">' . htmlspecialchars($empty, ENT_QUOTES, 'UTF-8') . '</span>';
         } else {
-            foreach ($parts as $part) { $html .= '<div><span style="color:#ffffff;">' . htmlspecialchars((string)$part, ENT_QUOTES, 'UTF-8') . '</span></div>'; }
+            foreach ($parts as $part) {
+                $part = (string)$part;
+
+                // Erwartet z.B.: "Kreis 1 (#12345)" oder "Kreis 1 - Vorgarten (#12345)"
+                $id = '';
+                $name = $part;
+
+                if (preg_match('/#(\d+)/', $part, $matches)) {
+                    $id = $matches[1];
+                }
+
+                if (preg_match('/^(.*?)\s*\(#\d+\)$/', $part, $matches)) {
+                    $name = trim($matches[1]);
+                }
+
+                $html .= '<div>';
+                $html .= '<span style="color:' . $accentColor . ';">' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . ' .....</span> ';
+                $html .= '<span style="color:' . $textColor . ';">|</span> ';
+                $html .= '<span style="color:' . $textColor . ';">' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '</span>';
+                $html .= '</div>';
+            }
         }
+
         return $html . '</div>';
     }
 
@@ -530,6 +559,27 @@ class IrrigationArea extends IPSModule
         if ($autoID !== false) {
             IPS_SetHidden($autoID, $mode !== self::MODE_AUTO);
         }
+    }
+
+    private function GetHtmlStyleFromMaster(): array
+    {
+        $masterID = @IPS_GetParent($this->InstanceID);
+
+        if ($masterID > 0 && function_exists('IRR_GetHtmlStyle')) {
+            $json = @IRR_GetHtmlStyle($masterID);
+            $data = json_decode($json, true);
+
+            if (is_array($data)) {
+                return $data;
+            }
+        }
+
+        return [
+            'fontFamily' => 'Tahoma',
+            'fontSize' => 12,
+            'accentColor' => '#4da6ff',
+            'textColor' => '#ffffff'
+        ];
     }
 
     private function RegisterProfiles(): void
