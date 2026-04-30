@@ -298,10 +298,10 @@ class IrrigationController extends IPSModule
 
         $used = [];
         foreach ($areas as $areaID) {
-            $areaNumber = @IRRA_GetAreaNumber($areaID);
-            if (is_int($areaNumber)) {
-                $used[] = $areaNumber;
-            }
+          $areaNumber = $this->GetAreaNumberSafe($areaID);
+          if ($areaNumber > 0) {
+              $used[] = $areaNumber;
+          }
         }
 
         $number = 1;
@@ -350,7 +350,7 @@ class IrrigationController extends IPSModule
         $parts = [];
 
         foreach ($areas as $areaID) {
-            $number = @IRRA_GetAreaNumber($areaID);
+            $number = $this->GetAreaNumberSafe($areaID);
 
             if (is_int($number)) {
                 @IPS_SetPosition($areaID, 900 + $number);
@@ -694,6 +694,32 @@ class IrrigationController extends IPSModule
         return $result;
     }
 
+    private function GetAreaNumberSafe(int $areaID): int
+    {
+        try {
+            if (function_exists('IRRA_GetAreaNumber')) {
+                $number = @IRRA_GetAreaNumber($areaID);
+                if (is_int($number)) {
+                    return $number;
+                }
+            }
+
+            if (@IPS_InstanceExists($areaID)) {
+                $number = @IPS_GetProperty($areaID, 'AreaNumber');
+                if (is_numeric($number)) {
+                    return (int) $number;
+                }
+            }
+        } catch (Throwable $e) {
+            $this->Debug('GetAreaNumberSafe.Exception', [
+                'AreaID' => $areaID,
+                'Error'  => $e->getMessage()
+            ]);
+        }
+
+        return 0;
+    }
+
     private function GetAreas(): array
     {
         $maxAreas = max(1, min(10, $this->ReadPropertyInteger('MaxZones')));
@@ -715,6 +741,9 @@ class IrrigationController extends IPSModule
             }
 
             $number = @IRRA_GetAreaNumber($childID);
+              if (!is_int($number) || $number < 1 || $number > $maxAreas) {
+                  continue;
+              }
             if (!is_int($number) || $number < 1 || $number > $maxAreas) {
                 continue;
             }
@@ -725,7 +754,7 @@ class IrrigationController extends IPSModule
         ksort($areas, SORT_NATURAL);
         return array_values($areas);
     }
-    
+
     private function GetZones(): array
     {
         $maxZones = max(1, min(10, $this->ReadPropertyInteger('MaxZones')));
