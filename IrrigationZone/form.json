@@ -1,24 +1,129 @@
 {
-  "elements":[
-    {"type":"ExpansionPanel","caption":"Zone","items":[
-      {"name":"Enabled","type":"CheckBox","caption":"Zone aktiv"},
-      {"name":"AreaNumber","type":"NumberSpinner","caption":"Reihenfolge / Zonennummer (1-10)"},
-      {"name":"Mode","type":"Select","caption":"Betriebsmodus","options":[
-        {"caption":"Manuell","value":1},{"caption":"Zeitsteuerung","value":2},{"caption":"Automatik","value":3}
-      ]},
-      {"name":"PauseBetweenZonesSeconds","type":"NumberSpinner","caption":"Pause zwischen Kreisen in dieser Zone (Sekunden)"},
-      {"name":"MaxZones","type":"NumberSpinner","caption":"Maximale Kreise in dieser Zone (1-10)"}
-    ]}
+  "elements": [
+    {
+      "type": "ExpansionPanel",
+      "caption": "Kreis",
+      "items": [
+        {
+          "name": "Enabled",
+          "type": "CheckBox",
+          "caption": "Kreis aktiv"
+        },
+        {
+          "name": "ZoneNumber",
+          "type": "NumberSpinner",
+          "caption": "Reihenfolge / Kreisnummer (1-10)"
+        },
+        {
+          "name": "Duration",
+          "type": "NumberSpinner",
+          "caption": "Beregnungsdauer (Minuten)"
+        },
+        {
+          "name": "MoistureThreshold",
+          "type": "NumberSpinner",
+          "caption": "Feuchteschwelle (%)"
+        },
+        {
+          "name": "MoistureMode",
+          "type": "Select",
+          "caption": "Feuchteauswertung",
+          "options": [
+            { "caption": "Niedrigster Feuchtigkeitswert", "value": 0 },
+            { "caption": "Durchschnitt der Sensoren", "value": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "ExpansionPanel",
+      "caption": "Sensoren",
+      "items": [
+        {
+          "name": "MoistureSensor1",
+          "type": "SelectVariable",
+          "caption": "Feuchtesensor 1"
+        },
+        {
+          "name": "MoistureSensor2",
+          "type": "SelectVariable",
+          "caption": "Feuchtesensor 2 optional"
+        },
+        {
+          "name": "RainLast24h",
+          "type": "SelectVariable",
+          "caption": "Regen letzte 24 h optional"
+        },
+        {
+          "name": "RainThreshold24h",
+          "type": "NumberSpinner",
+          "caption": "Regensperre ab mm / 24 h (0 = aus)"
+        }
+      ]
+    },
+    {
+      "type": "ExpansionPanel",
+      "caption": "Aktoren",
+      "items": [
+        {
+          "name": "Actuator1Instance",
+          "type": "SelectInstance",
+          "caption": "Aktor 1 Instanz (Shelly oder xComfort, optional)"
+        },
+        {
+          "name": "Actuator2Instance",
+          "type": "SelectInstance",
+          "caption": "Aktor 2 Instanz (Shelly oder xComfort, optional)"
+        },
+        {
+          "name": "DelayBetweenActuatorsMs",
+          "type": "NumberSpinner",
+          "caption": "Pause zwischen Aktor 1 und Aktor 2 (Millisekunden)"
+        },
+        {
+          "type": "Label",
+          "caption": "Beide Aktoren sind optional. Das Modul sucht unter der Instanz automatisch die passende schaltbare Bool-Variable und schaltet diese mit RequestAction. Bei xComfort kann eine kurze Pause zwischen zwei Schaltbefehlen notwendig sein."
+        }
+      ]
+    }
   ],
-  "actions":[
-    {"type":"Button","caption":"Neuen Kreis in dieser Zone anlegen","onClick":"IRRA_CreateZone($id);"},
-    {"type":"Button","caption":"Kreise aktualisieren","onClick":"IRRA_RefreshZones($id);"},
-    {"type":"Button","caption":"Zone starten","onClick":"IRRA_StartArea($id);"},
-    {"type":"Button","caption":"Zone stoppen","onClick":"IRRA_StopArea($id);"}
+  "actions": [
+    {
+      "type": "Button",
+      "caption": "Werte aktualisieren",
+      "onClick": "IRRZ_RefreshValues($id);"
+    },
+    {
+      "type": "Button",
+      "caption": "Automatikentscheidung prüfen",
+      "onClick": "IRRZ_Evaluate($id);"
+    },
+    {
+      "type": "Button",
+      "caption": "Kreis manuell starten",
+      "onClick": "IRRZ_StartZone($id);"
+    },
+    {
+      "type": "Button",
+      "caption": "Kreis stoppen",
+      "onClick": "IRRZ_StopZone($id);"
+    }
   ],
-  "status":[
-    {"code":102,"icon":"active","caption":"Zone ist aktiv"},
-    {"code":104,"icon":"inactive","caption":"Zone ist deaktiviert"},
-    {"code":200,"icon":"error","caption":"Keine Kreise in dieser Zone vorhanden"}
+  "status": [
+    {
+      "code": 102,
+      "icon": "active",
+      "caption": "Kreis ist aktiv"
+    },
+    {
+      "code": 104,
+      "icon": "inactive",
+      "caption": "Kreis ist deaktiviert"
+    },
+    {
+      "code": 200,
+      "icon": "error",
+      "caption": "Kein Aktor konfiguriert"
+    }
   ]
 }

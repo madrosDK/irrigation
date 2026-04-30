@@ -1,24 +1,94 @@
 {
-  "elements":[
-    {"type":"ExpansionPanel","caption":"Allgemein","items":[
-      {"name":"PumpLeadTimeSeconds","type":"NumberSpinner","caption":"Pumpenvorlauf beim Start der Sequenz (Sekunden)"},
-      {"name":"PumpEarlyOffSeconds","type":"NumberSpinner","caption":"Pumpe vor Ende des letzten Kreises ausschalten (Sekunden)"},
-      {"name":"PauseBetweenAreasSeconds","type":"NumberSpinner","caption":"Pause zwischen Zonen (Sekunden)"},
-      {"name":"MaxAreas","type":"NumberSpinner","caption":"Maximale Zonen (1-10)"}
-    ]},
-    {"type":"ExpansionPanel","caption":"Pumpe","items":[
-      {"name":"PumpInstance","type":"SelectInstance","caption":"Pumpenaktor (Shelly oder xComfort)"},
-      {"type":"Label","caption":"Der Master steuert die Pumpe zentral. Betriebsmodi und Zeiten liegen in den Bewässerungszonen."}
-    ]}
+  "elements": [
+    {
+      "type": "ExpansionPanel",
+      "caption": "Allgemein",
+      "items": [
+        {
+          "name": "Mode",
+          "type": "Select",
+          "caption": "Betriebsmodus",
+          "options": [
+            { "caption": "Manuell", "value": 1 },
+            { "caption": "Zeitsteuerung", "value": 2 },
+            { "caption": "Automatik", "value": 3 }
+          ]
+        },
+        {
+          "name": "PumpLeadTimeSeconds",
+          "type": "NumberSpinner",
+          "caption": "Pumpenvorlauf vor jedem Kreis (Sekunden)"
+        },
+        {
+          "name": "PumpEarlyOffSeconds",
+          "type": "NumberSpinner",
+          "caption": "Pumpe vor Ende des letzten Kreises ausschalten (Sekunden)"
+        },
+        {
+          "name": "PauseBetweenZonesSeconds",
+          "type": "NumberSpinner",
+          "caption": "Pause zwischen Kreisen (Sekunden)"
+        },
+        {
+          "name": "MaxZones",
+          "type": "NumberSpinner",
+          "caption": "Maximale Kreise (1-10)"
+        }
+      ]
+    },
+    {
+      "type": "ExpansionPanel",
+      "caption": "Pumpe",
+      "items": [
+        {
+          "name": "PumpInstance",
+          "type": "SelectInstance",
+          "caption": "Pumpenaktor (Shelly oder xComfort)"
+        },
+        {
+          "type": "Label",
+          "caption": "Das Modul sucht unter der Instanz automatisch die passende schaltbare Bool-Variable und schaltet diese mit RequestAction."
+        }
+      ]
+    }
   ],
-  "actions":[
-    {"type":"Button","caption":"Neue Zone anlegen","onClick":"IRR_CreateArea($id);"},
-    {"type":"Button","caption":"Zonen aktualisieren","onClick":"IRR_RefreshAreas($id);"},
-    {"type":"Button","caption":"Sequenz starten","onClick":"IRR_StartSequence($id);"},
-    {"type":"Button","caption":"Sequenz stoppen","onClick":"IRR_StopSequence($id);"}
+  "actions": [
+    {
+      "type": "Button",
+      "caption": "Neuen Kreis unter dieser Instanz anlegen",
+      "onClick": "IRR_CreateZone($id);"
+    },
+    {
+      "type": "Button",
+      "caption": "Kreise aktualisieren",
+      "onClick": "IRR_RefreshZones($id);"
+    },
+    {
+      "type": "Button",
+      "caption": "Sequenz manuell / zeitgesteuert starten",
+      "onClick": "IRR_StartManualSequence($id);"
+    },
+    {
+      "type": "Button",
+      "caption": "Automatik prüfen und starten",
+      "onClick": "IRR_StartAutomaticSequence($id);"
+    },
+    {
+      "type": "Button",
+      "caption": "Sequenz stoppen",
+      "onClick": "IRR_StopSequence($id);"
+    }
   ],
-  "status":[
-    {"code":102,"icon":"active","caption":"Instanz ist aktiv"},
-    {"code":200,"icon":"error","caption":"Keine Zonen oder keine Pumpe konfiguriert"}
+  "status": [
+    {
+      "code": 102,
+      "icon": "active",
+      "caption": "Instanz ist aktiv"
+    },
+    {
+      "code": 200,
+      "icon": "error",
+      "caption": "Keine Kreise oder keine Pumpe konfiguriert"
+    }
   ]
 }

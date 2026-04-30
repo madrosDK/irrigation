@@ -1,1 +1,14 @@
-{"id":"{A01F9B78-A377-4D89-BB13-222222222222}","name":"Irrigation Controller","type":3,"vendor":"madrosDK","aliases":["Bewässerungssteuerung Master"],"parentRequirements":[],"childRequirements":[],"implemented":[],"prefix":"IRR","url":"https://github.com/madrosDK/irrigation"}
+{
+  "id": "{A01F9B78-A377-4D89-BB13-222222222222}",
+  "name": "Irrigation Controller",
+  "type": 3,
+  "vendor": "madrosDK",
+  "aliases": [
+    "Bewässerungssteuerung Master"
+  ],
+  "parentRequirements": [],
+  "childRequirements": [],
+  "implemented": [],
+  "prefix": "IRR",
+  "url": "https://github.com/madrosDK/irrigation"
+}
