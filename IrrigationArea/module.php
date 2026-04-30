@@ -586,16 +586,12 @@ class IrrigationArea extends IPSModule
     private function MaintainWeekplan(string $Ident, string $Name): void
     {
         $eventID = @IPS_GetObjectIDByIdent($Ident, $this->InstanceID);
+
         if ($eventID === false) {
             $eventID = IPS_CreateEvent(2);
             IPS_SetParent($eventID, $this->InstanceID);
             IPS_SetIdent($eventID, $Ident);
             IPS_SetName($eventID, $Name);
-
-            for ($day = 0; $day <= 6; $day++) {
-                @IPS_SetEventScheduleGroup($eventID, $day, 1 << $day);
-            }
-
             IPS_SetEventActive($eventID, false);
         }
 
@@ -603,11 +599,19 @@ class IrrigationArea extends IPSModule
             @IPS_SetParent($eventID, $this->InstanceID);
         }
 
+        // Wichtig: Immer alle 7 Tagesgruppen setzen/reparieren
+        for ($day = 0; $day <= 6; $day++) {
+            @IPS_SetEventScheduleGroup($eventID, $day, 1 << $day);
+        }
+
+        // Wochenplan-Aktion AUS
         @IPS_SetEventScheduleAction($eventID, 0, 'Aus', 0x808080, '');
 
+        // Wochenplan-Aktion EIN
         $script = 'IRRA_StartArea(' . $this->InstanceID . ');';
         @IPS_SetEventScheduleAction($eventID, 1, 'Ein', 0x27AE60, $script);
 
+        // Kein allgemeines EventScript verwenden.
         @IPS_SetEventScript($eventID, '');
     }
 
