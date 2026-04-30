@@ -9,6 +9,7 @@ class IrrigationController extends IPSModule
     private const MODE_AUTO = 3;
 
     private const MODULE_ID_ZONE = '{B69A3F87-2E64-4AA0-B67E-7D84587B8A11}';
+    private const MODULE_ID_AREA = '{C6A0D3B7-3E8B-4B74-9F1D-7E5F1D5A9A21}';
 
     public function Create()
     {
@@ -281,6 +282,96 @@ class IrrigationController extends IPSModule
 
         $this->WriteLog('Kreis ' . $number . ' angelegt');
         $this->Debug('CreateZone', ['ZoneID' => $zoneID, 'Number' => $number]);
+    }
+
+    public function CreateArea(): void
+    {
+        $this->Debug('CreateArea', 'gestartet');
+
+        $areas = $this->GetAreas();
+        $maxAreas = max(1, min(10, $this->ReadPropertyInteger('MaxZones')));
+
+        if (count($areas) >= $maxAreas) {
+            $this->WriteLog('Maximale Zonenanzahl erreicht');
+            return;
+        }
+
+        $used = [];
+        foreach ($areas as $areaID) {
+            $areaNumber = @IRRA_GetAreaNumber($areaID);
+            if (is_int($areaNumber)) {
+                $used[] = $areaNumber;
+            }
+        }
+
+        $number = 1;
+        while (in_array($number, $used, true) && $number <= $maxAreas) {
+            $number++;
+        }
+
+        if ($number > $maxAreas) {
+            $this->WriteLog('Keine freie Zonennummer gefunden');
+            return;
+        }
+
+        try {
+            $areaID = IPS_CreateInstance(self::MODULE_ID_AREA);
+        } catch (Throwable $e) {
+            $this->WriteLog('Zone konnte nicht angelegt werden: ' . $e->getMessage());
+            $this->Debug('CreateArea.Exception', $e->getMessage());
+            return;
+        }
+
+        try {
+            IPS_SetParent($areaID, $this->InstanceID);
+            IPS_SetName($areaID, 'Zone ' . $number);
+            IPS_SetPosition($areaID, 900 + $number);
+            IPS_SetProperty($areaID, 'AreaNumber', $number);
+            IPS_ApplyChanges($areaID);
+        } catch (Throwable $e) {
+            $this->WriteLog('Zone wurde erstellt, konnte aber nicht konfiguriert werden: ' . $e->getMessage());
+            $this->Debug('CreateArea.ConfigureException', $e->getMessage());
+
+            if (@IPS_ObjectExists($areaID)) {
+                @IPS_DeleteInstance($areaID);
+            }
+            return;
+        }
+
+        $this->RefreshAreas();
+        $this->WriteLog('Zone ' . $number . ' angelegt');
+    }
+
+    public function RefreshAreas(): void
+    {
+        $this->Debug('RefreshAreas', 'gestartet');
+
+        $areas = $this->GetAreas();
+        $parts = [];
+
+        foreach ($areas as $areaID) {
+            $number = @IRRA_GetAreaNumber($areaID);
+
+            if (is_int($number)) {
+                @IPS_SetPosition($areaID, 900 + $number);
+            }
+
+            $name = @IPS_GetName($areaID);
+            $standardName = 'Zone ' . $number;
+
+            if ($name === $standardName || $name === '') {
+                $parts[] = 'Zone ' . $number . ' (#' . $areaID . ')';
+            } else {
+                $parts[] = 'Zone ' . $number . ' - ' . $name . ' (#' . $areaID . ')';
+            }
+        }
+
+        $this->SetValue('ZoneOverview', $this->RenderZoneOverviewHtml($parts));
+
+        $this->Debug('RefreshAreas.Done', [
+            'Areas' => $areas,
+            'AreaCount' => count($areas)
+        ]);
     }
 
     public function RefreshZones(): void
@@ -603,6 +694,38 @@ class IrrigationController extends IPSModule
         return $result;
     }
 
+    private function GetAreas(): array
+    {
+        $maxAreas = max(1, min(10, $this->ReadPropertyInteger('MaxZones')));
+        $children = IPS_GetChildrenIDs($this->InstanceID);
+        $areas = [];
+
+        foreach ($children as $childID) {
+            if (!@IPS_InstanceExists($childID)) {
+                continue;
+            }
+
+            $instance = IPS_GetInstance($childID);
+            if (!isset($instance['ModuleInfo']['ModuleID'])) {
+                continue;
+            }
+
+            if (strtoupper($instance['ModuleInfo']['ModuleID']) !== strtoupper(self::MODULE_ID_AREA)) {
+                continue;
+            }
+
+            $number = @IRRA_GetAreaNumber($childID);
+            if (!is_int($number) || $number < 1 || $number > $maxAreas) {
+                continue;
+            }
+
+            $areas[$number . '_' . $childID] = $childID;
+        }
+
+        ksort($areas, SORT_NATURAL);
+        return array_values($areas);
+    }
+    
     private function GetZones(): array
     {
         $maxZones = max(1, min(10, $this->ReadPropertyInteger('MaxZones')));
