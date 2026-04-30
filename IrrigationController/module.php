@@ -673,18 +673,23 @@ class IrrigationController extends IPSModule
 
     private function RenderAreaOverviewHtml(array $areas): string
     {
-        $html = '<div style="font-family:Tahoma, Arial, sans-serif; font-size:12px; line-height:1.35; text-align:right;">';
+        $fontFamily  = htmlspecialchars($this->ReadPropertyString('HtmlFontFamily'), ENT_QUOTES, 'UTF-8');
+        $fontSize    = max(8, min(40, $this->ReadPropertyInteger('HtmlFontSize')));
+        $accentColor = htmlspecialchars($this->ReadPropertyString('HtmlAccentColor'), ENT_QUOTES, 'UTF-8');
+        $textColor   = htmlspecialchars($this->ReadPropertyString('HtmlTextColor'), ENT_QUOTES, 'UTF-8');
+
+        $html = '<div style="font-family:' . $fontFamily . ', Arial, sans-serif; font-size:' . $fontSize . 'px; line-height:1.35; text-align:right;">';
 
         if (count($areas) === 0) {
-            $html .= '<span style="color:#ffffff;">Keine Zonen vorhanden</span>';
+            $html .= '<span style="color:' . $textColor . ';">Keine Zonen vorhanden</span>';
         } else {
             foreach ($areas as $area) {
                 $id = htmlspecialchars((string)($area['id'] ?? ''), ENT_QUOTES, 'UTF-8');
                 $name = htmlspecialchars((string)($area['name'] ?? ''), ENT_QUOTES, 'UTF-8');
 
                 $html .= '<div>';
-                $html .= '<span style="color:#4da6ff;">' . $id . '</span> ';
-                $html .= '<span style="color:#ffffff;">' . $name . '</span>';
+                $html .= '<span style="color:' . $accentColor . ';">ID ' . $id . '</span>';
+                $html .= '<span style="color:' . $textColor . ';"> | ' . $name . '</span>';
                 $html .= '</div>';
             }
         }
