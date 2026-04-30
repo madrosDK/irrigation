@@ -99,6 +99,12 @@ class IrrigationArea extends IPSModule
                 break;
             case 'AreaActive':
                 if ((bool)$Value) {
+                    if ($this->IsAnotherAreaOrZoneActiveGlobally()) {
+                        $this->WriteLog('Start blockiert: Eine andere Zone oder ein anderer Kreis läuft bereits');
+                        $this->SetValue('AreaActive', false);
+                        return;
+                    }
+
                     $this->StartArea(false);
                 } else {
                     $this->StopArea(false);
@@ -165,6 +171,11 @@ class IrrigationArea extends IPSModule
 
     public function StartArea(bool $FromMaster = false): void
     {
+      if (!$FromMaster && $this->IsAnotherAreaOrZoneActiveGlobally()) {
+            $this->WriteLog('Start blockiert: Eine andere Zone oder ein anderer Kreis läuft bereits');
+            $this->SetValue('AreaActive', false);
+            return;
+        }
         $this->SetBuffer('StartedFromMaster', $FromMaster ? '1' : '0');
         if (!$this->ReadPropertyBoolean('Enabled')) {
             $this->WriteLog('Zone deaktiviert - Start ignoriert');
@@ -286,6 +297,49 @@ class IrrigationArea extends IPSModule
     public function IsEnabled(): bool { return $this->ReadPropertyBoolean('Enabled'); }
     public function GetAreaNumber(): int { return $this->ReadPropertyInteger('AreaNumber'); }
 
+    private function IsAnotherAreaOrZoneActiveGlobally(): bool
+    {
+        $masterID = @IPS_GetParent($this->InstanceID);
+
+        if ($masterID <= 0 || !@IPS_ObjectExists($masterID)) {
+            return false;
+        }
+
+        foreach (IPS_GetChildrenIDs($masterID) as $areaID) {
+            if (!@IPS_InstanceExists($areaID)) {
+                continue;
+            }
+
+            // Andere aktive Area sperrt
+            if ($areaID !== $this->InstanceID) {
+                $areaActiveID = @IPS_GetObjectIDByIdent('AreaActive', $areaID);
+                if ($areaActiveID !== false && $areaActiveID > 0 && @IPS_VariableExists($areaActiveID)) {
+                    if ((bool)@GetValue($areaActiveID)) {
+                        return true;
+                    }
+                }
+            }
+
+            // Jeder aktive Kreis in jeder Area sperrt
+            foreach (IPS_GetChildrenIDs($areaID) as $zoneID) {
+                if (!@IPS_InstanceExists($zoneID)) {
+                    continue;
+                }
+
+                $zoneActiveID = @IPS_GetObjectIDByIdent('ZoneActive', $zoneID);
+                if ($zoneActiveID === false || $zoneActiveID <= 0 || !@IPS_VariableExists($zoneActiveID)) {
+                    continue;
+                }
+
+                if ((bool)@GetValue($zoneActiveID)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+    
     private function GetZones(): array
     {
         $maxZones = max(1, min(10, $this->ReadPropertyInteger('MaxZones')));

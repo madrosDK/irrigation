@@ -169,6 +169,12 @@ class IrrigationZone extends IPSModule
 
             case 'ZoneActive':
                 if ((bool) $Value) {
+                    if ($this->IsAnotherAreaOrZoneActiveGlobally()) {
+                        $this->WriteLog('Start blockiert: Eine andere Zone oder ein anderer Kreis läuft bereits');
+                        $this->SetValue('ZoneActive', false);
+                        return;
+                    }
+
                     $this->StartZone();
                 } else {
                     $this->StopZone();
@@ -314,6 +320,11 @@ class IrrigationZone extends IPSModule
 
     public function StartZone(bool $FromMaster = false): void
     {
+      if (!$FromMaster && $this->IsAnotherAreaOrZoneActiveGlobally()) {
+          $this->WriteLog('Start blockiert: Eine andere Zone oder ein anderer Kreis läuft bereits');
+          $this->SetValue('ZoneActive', false);
+          return;
+        }
         $delayMs = max(0, $this->ReadPropertyInteger('DelayBetweenActuatorsMs'));
 
         $this->Debug('StartZone', [
@@ -504,6 +515,57 @@ class IrrigationZone extends IPSModule
         return $this->ReadPropertyInteger('Duration');
     }
 
+    private function IsAnotherAreaOrZoneActiveGlobally(): bool
+    {
+        $areaID = @IPS_GetParent($this->InstanceID);
+
+        if ($areaID <= 0 || !@IPS_ObjectExists($areaID)) {
+            return false;
+        }
+
+        $masterID = @IPS_GetParent($areaID);
+
+        if ($masterID <= 0 || !@IPS_ObjectExists($masterID)) {
+            return false;
+        }
+
+        foreach (IPS_GetChildrenIDs($masterID) as $otherAreaID) {
+            if (!@IPS_InstanceExists($otherAreaID)) {
+                continue;
+            }
+
+            // Aktive Area sperrt manuelle Kreisstarts
+            $areaActiveID = @IPS_GetObjectIDByIdent('AreaActive', $otherAreaID);
+            if ($areaActiveID !== false && $areaActiveID > 0 && @IPS_VariableExists($areaActiveID)) {
+                if ((bool)@GetValue($areaActiveID)) {
+                    return true;
+                }
+            }
+
+            // Aktiver Kreis irgendwo sperrt ebenfalls
+            foreach (IPS_GetChildrenIDs($otherAreaID) as $zoneID) {
+                if ($zoneID === $this->InstanceID) {
+                    continue;
+                }
+
+                if (!@IPS_InstanceExists($zoneID)) {
+                    continue;
+                }
+
+                $zoneActiveID = @IPS_GetObjectIDByIdent('ZoneActive', $zoneID);
+                if ($zoneActiveID === false || $zoneActiveID <= 0 || !@IPS_VariableExists($zoneActiveID)) {
+                    continue;
+                }
+
+                if ((bool)@GetValue($zoneActiveID)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+    
     private function SetZoneActuatorState(int $number, bool $state): bool
     {
         $targetID = $this->GetActuatorTargetID($number);
