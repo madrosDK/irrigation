@@ -597,13 +597,10 @@ class IrrigationArea extends IPSModule
             IPS_SetIdent($eid, $ident);
             IPS_SetName($eid, $name);
         }
-    
-        // Wochenplan-Aktionen setzen:
-        // 0 = Aus / keine Aktion
-        // 1 = Ein / Bewässerung starten
-        IPS_SetEventScheduleGroup($eid, 0, 0);
-        IPS_SetEventScheduleAction($eid, 0, 0, 'Aus', 0x808080, '');
-        IPS_SetEventScheduleAction($eid, 1, 1, 'Ein', 0x00FF00, '');
+
+        // Aktion 1 = Ein / Bewässerung starten
+        // Kompatibel: ältere IPS-Versionen verwenden 5 Parameter.
+        IPS_SetEventScheduleAction($eid, 1, 'Ein', 0x00FF00, '');
 
         $handler = ($ident === 'ScheduleAuto') ? 'HandleScheduleAuto' : 'HandleScheduleTimer';
 
