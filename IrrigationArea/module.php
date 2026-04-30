@@ -598,8 +598,11 @@ class IrrigationArea extends IPSModule
             IPS_SetName($eid, $name);
         }
 
-        // Aktion 1 = Ein / Bewässerung starten
-        // Kompatibel: ältere IPS-Versionen verwenden 5 Parameter.
+        // Aktion 0 = Aus
+        // Aktion 1 = Ein
+        // IP-Symcon erwartet hier 4 Parameter nach Event-ID:
+        // EventID, ActionID, Name, Farbe, Script
+        IPS_SetEventScheduleAction($eid, 0, 'Aus', 0x808080, '');
         IPS_SetEventScheduleAction($eid, 1, 'Ein', 0x00FF00, '');
 
         $handler = ($ident === 'ScheduleAuto') ? 'HandleScheduleAuto' : 'HandleScheduleTimer';
