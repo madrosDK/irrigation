@@ -1,14 +1,1 @@
-{
-  "id": "{B69A3F87-2E64-4AA0-B67E-7D84587B8A11}",
-  "name": "Irrigation Zone",
-  "type": 3,
-  "vendor": "madrosDK",
-  "aliases": [
-    "Bewässerungskreis"
-  ],
-  "parentRequirements": [],
-  "childRequirements": [],
-  "implemented": [],
-  "prefix": "IRRZ",
-  "url": "https://github.com/madrosDK/irrigation"
-}
+{"id":"{B69A3F87-2E64-4AA0-B67E-7D84587B8A11}","name":"Irrigation Zone","type":3,"vendor":"madrosDK","aliases":["Bewässerungskreis"],"parentRequirements":[],"childRequirements":[],"implemented":[],"prefix":"IRRZ","url":"https://github.com/madrosDK/irrigation"}
