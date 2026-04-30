@@ -65,6 +65,10 @@ class IrrigationArea extends IPSModule
         $this->SetValue('Mode', $mode);
         $this->SetValue('PauseBetweenZonesSeconds', $this->ReadPropertyInteger('PauseBetweenZonesSeconds'));
 
+        $this->MaintainWeekplan('ScheduleTimer', 'Zeitsteuerung');
+        $this->MaintainWeekplan('ScheduleAuto', 'Automatik');
+        $this->UpdateWeekplanVisibility();
+
         $this->RefreshZones();
         $this->UpdateStatus();
     }
@@ -397,6 +401,78 @@ class IrrigationArea extends IPSModule
     {
         if (!$this->ReadPropertyBoolean('Enabled')) { $this->SetStatus(104); return; }
         $this->SetStatus(count($this->GetZones()) > 0 ? 102 : 200);
+    }
+
+    public function HandleScheduleTimer(bool $state): void
+    {
+        if (!$state) {
+            return;
+        }
+
+        if (!$this->ReadPropertyBoolean('Enabled')) {
+            $this->WriteLog('Zeitsteuerung ignoriert - Zone deaktiviert');
+            return;
+        }
+
+        if ($this->ReadPropertyInteger('Mode') !== self::MODE_TIME) {
+            $this->WriteLog('Zeitsteuerung ignoriert - Betriebsmodus ist nicht Zeitsteuerung');
+            return;
+        }
+
+        $this->StartArea(false);
+    }
+
+    public function HandleScheduleAuto(bool $state): void
+    {
+        if (!$state) {
+            return;
+        }
+
+        if (!$this->ReadPropertyBoolean('Enabled')) {
+            $this->WriteLog('Automatik ignoriert - Zone deaktiviert');
+            return;
+        }
+
+        if ($this->ReadPropertyInteger('Mode') !== self::MODE_AUTO) {
+            $this->WriteLog('Automatik ignoriert - Betriebsmodus ist nicht Automatik');
+            return;
+        }
+
+        $this->StartArea(false);
+    }
+
+    private function MaintainWeekplan(string $ident, string $name): void
+    {
+        $eid = @$this->GetIDForIdent($ident);
+
+        if ($eid === false) {
+            $eid = IPS_CreateEvent(2);
+            IPS_SetParent($eid, $this->InstanceID);
+            IPS_SetIdent($eid, $ident);
+            IPS_SetName($eid, $name);
+            IPS_SetEventActive($eid, false);
+        }
+
+        $handler = ($ident === 'ScheduleAuto') ? 'HandleScheduleAuto' : 'HandleScheduleTimer';
+        IPS_SetEventScript(
+            $eid,
+            'if ($_IPS[\'ACTION\'] == 1) { IRRA_' . $handler . '($_IPS[\'TARGET\'], $_IPS[\'VALUE\']); }'
+        );
+    }
+
+    private function UpdateWeekplanVisibility(): void
+    {
+        $mode = $this->ReadPropertyInteger('Mode');
+
+        $timerID = @$this->GetIDForIdent('ScheduleTimer');
+        if ($timerID !== false) {
+            IPS_SetHidden($timerID, $mode !== self::MODE_TIME);
+        }
+
+        $autoID = @$this->GetIDForIdent('ScheduleAuto');
+        if ($autoID !== false) {
+            IPS_SetHidden($autoID, $mode !== self::MODE_AUTO);
+        }
     }
 
     private function RegisterProfiles(): void

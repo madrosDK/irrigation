@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 class IrrigationController extends IPSModule
 {
-    private const MODE_MANUAL = 1;
-    private const MODE_TIME   = 2;
-    private const MODE_AUTO   = 3;
 
     private const MODULE_ID_AREA = '{C6A0D3B7-3E8B-4B74-9F1D-7E5F1D5A9A21}';
 
@@ -14,7 +11,6 @@ class IrrigationController extends IPSModule
     {
         parent::Create();
 
-        $this->RegisterPropertyInteger('Mode', self::MODE_MANUAL);
         $this->RegisterPropertyInteger('PumpLeadTimeSeconds', 5);
         $this->RegisterPropertyInteger('PumpEarlyOffSeconds', 0);
         $this->RegisterPropertyInteger('PauseBetweenZonesSeconds', 5);
@@ -25,9 +21,6 @@ class IrrigationController extends IPSModule
         $this->RegisterPropertyInteger('Pump', 0); // Legacy
 
         $this->RegisterProfiles();
-
-        $this->RegisterVariableInteger('Mode', 'Betriebsmodus', 'IRR.Mode', 10);
-        $this->EnableAction('Mode');
 
         $this->RegisterVariableInteger('PumpLeadTimeSeconds', 'Pumpenvorlauf', 'IRR.Seconds', 20);
         $this->EnableAction('PumpLeadTimeSeconds');
@@ -74,21 +67,9 @@ class IrrigationController extends IPSModule
             return;
         }
 
-        $mode = $this->ReadPropertyInteger('Mode');
-        if (!in_array($mode, [self::MODE_MANUAL, self::MODE_TIME, self::MODE_AUTO], true)) {
-            IPS_SetProperty($this->InstanceID, 'Mode', self::MODE_MANUAL);
-            IPS_ApplyChanges($this->InstanceID);
-            return;
-        }
-
-        $this->SetValue('Mode', $mode);
         $this->SetValue('PumpLeadTimeSeconds', $this->ReadPropertyInteger('PumpLeadTimeSeconds'));
         $this->SetValue('PumpEarlyOffSeconds', $this->ReadPropertyInteger('PumpEarlyOffSeconds'));
         $this->SetValue('PauseBetweenZonesSeconds', $this->ReadPropertyInteger('PauseBetweenZonesSeconds'));
-
-        $this->MaintainWeekplan('ScheduleTimer', 'Zeitsteuerung');
-        $this->MaintainWeekplan('ScheduleAuto', 'Automatik');
-        $this->UpdateWeekplanVisibility();
 
         $this->RefreshAreas();
         $this->UpdateStatus();
@@ -141,32 +122,6 @@ class IrrigationController extends IPSModule
             default:
                 throw new Exception('Unbekannte Aktion: ' . $Ident);
         }
-    }
-
-    public function HandleScheduleTimer(bool $state): void
-    {
-        if (!$state) {
-            return;
-        }
-
-        if ($this->GetValue('Mode') !== self::MODE_TIME) {
-            return;
-        }
-
-        $this->StartManualSequence();
-    }
-
-    public function HandleScheduleAuto(bool $state): void
-    {
-        if (!$state) {
-            return;
-        }
-
-        if ($this->GetValue('Mode') !== self::MODE_AUTO) {
-            return;
-        }
-
-        $this->StartAutomaticSequence();
     }
 
     public function CreateArea(): void
@@ -663,36 +618,6 @@ class IrrigationController extends IPSModule
         }
 
         return $bestID;
-    }
-
-    private function MaintainWeekplan(string $ident, string $name): void
-    {
-        $eid = @$this->GetIDForIdent($ident);
-
-        if ($eid === false) {
-            $eid = IPS_CreateEvent(2);
-            IPS_SetParent($eid, $this->InstanceID);
-            IPS_SetIdent($eid, $ident);
-            IPS_SetName($eid, $name);
-            IPS_SetEventActive($eid, false);
-        }
-
-        IPS_SetEventScript($eid, 'if ($_IPS[\'ACTION\'] == 1) { IRR_' . ($ident === 'ScheduleAuto' ? 'HandleScheduleAuto' : 'HandleScheduleTimer') . '($_IPS[\'TARGET\'], $_IPS[\'VALUE\']); }');
-    }
-
-    private function UpdateWeekplanVisibility(): void
-    {
-        $mode = $this->ReadPropertyInteger('Mode');
-
-        $timerID = @$this->GetIDForIdent('ScheduleTimer');
-        if ($timerID !== false) {
-            IPS_SetHidden($timerID, $mode !== self::MODE_TIME);
-        }
-
-        $autoID = @$this->GetIDForIdent('ScheduleAuto');
-        if ($autoID !== false) {
-            IPS_SetHidden($autoID, $mode !== self::MODE_AUTO);
-        }
     }
 
     private function WriteLog(string $message): void
