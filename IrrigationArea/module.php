@@ -598,12 +598,16 @@ class IrrigationArea extends IPSModule
             IPS_SetName($eid, $name);
         }
 
-        // Aktion 0 = Aus
-        // Aktion 1 = Ein
-        // IP-Symcon erwartet hier 4 Parameter nach Event-ID:
-        // EventID, ActionID, Name, Farbe, Script
-        IPS_SetEventScheduleAction($eid, 0, 'Aus', 0x808080, '');
-        IPS_SetEventScheduleAction($eid, 1, 'Ein', 0x00FF00, '');
+        // Aktionen für den Wochenplan
+        // 0 = Inaktiv
+        // 1 = Aktiv / Bewässerung starten
+        IPS_SetEventScheduleAction($eid, 0, 'Inaktiv', 0x808080, '');
+        IPS_SetEventScheduleAction($eid, 1, 'Aktiv', 0x00FF00, '');
+
+        // WICHTIG:
+        // Gruppe 0 = Montag bis Sonntag, damit die Ansicht wie früher Mo–So zeigt.
+        // Bitmaske 127 = alle Wochentage
+        IPS_SetEventScheduleGroup($eid, 0, 127);
 
         $handler = ($ident === 'ScheduleAuto') ? 'HandleScheduleAuto' : 'HandleScheduleTimer';
 
