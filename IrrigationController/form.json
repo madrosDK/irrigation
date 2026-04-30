@@ -2,18 +2,8 @@
   "elements": [
     {
       "type": "ExpansionPanel",
-      "caption": "Allgemein",
+      "caption": "Master / Bewässerungssteuerung",
       "items": [
-        {
-          "name": "Mode",
-          "type": "Select",
-          "caption": "Betriebsmodus (alt / Kompatibilität)",
-          "options": [
-            { "caption": "Manuell", "value": 1 },
-            { "caption": "Zeitsteuerung", "value": 2 },
-            { "caption": "Automatik", "value": 3 }
-          ]
-        },
         {
           "name": "PumpLeadTimeSeconds",
           "type": "NumberSpinner",
@@ -27,12 +17,12 @@
         {
           "name": "PauseBetweenZonesSeconds",
           "type": "NumberSpinner",
-          "caption": "Pause zwischen Kreisen / Zonen (Sekunden)"
+          "caption": "Pause zwischen Zonen (Sekunden)"
         },
         {
           "name": "MaxZones",
           "type": "NumberSpinner",
-          "caption": "Maximale Kreise/Zonen (1-10)"
+          "caption": "Maximale Zonen (1-10)"
         }
       ]
     },
@@ -47,7 +37,7 @@
         },
         {
           "type": "Label",
-          "caption": "Das Modul sucht unter der Instanz automatisch die passende schaltbare Bool-Variable und schaltet diese mit RequestAction."
+          "caption": "Der Master steuert die Pumpe global. Das Modul sucht unter der Instanz automatisch die passende schaltbare Bool-Variable und schaltet diese mit RequestAction."
         }
       ]
     }
@@ -64,28 +54,9 @@
       "onClick": "IRR_RefreshAreas($id);"
     },
     {
-      "type": "Label",
-      "caption": "Kompatibilität / alte Kreisstruktur"
-    },
-    {
       "type": "Button",
-      "caption": "Neuen Kreis direkt unter dieser Instanz anlegen (alt)",
-      "onClick": "IRR_CreateZone($id);"
-    },
-    {
-      "type": "Button",
-      "caption": "Kreise aktualisieren (alt)",
-      "onClick": "IRR_RefreshZones($id);"
-    },
-    {
-      "type": "Button",
-      "caption": "Sequenz manuell / zeitgesteuert starten (alt)",
+      "caption": "Sequenz starten",
       "onClick": "IRR_StartManualSequence($id);"
-    },
-    {
-      "type": "Button",
-      "caption": "Automatik prüfen und starten (alt)",
-      "onClick": "IRR_StartAutomaticSequence($id);"
     },
     {
       "type": "Button",
@@ -97,12 +68,12 @@
     {
       "code": 102,
       "icon": "active",
-      "caption": "Instanz ist aktiv"
+      "caption": "Master ist aktiv"
     },
     {
       "code": 200,
       "icon": "error",
-      "caption": "Keine Kreise/Zonen oder keine Pumpe konfiguriert"
+      "caption": "Keine Zonen oder keine Pumpe konfiguriert"
     }
   ]
 }
