@@ -740,11 +740,8 @@ class IrrigationController extends IPSModule
                 continue;
             }
 
-            $number = @IRRA_GetAreaNumber($childID);
-              if (!is_int($number) || $number < 1 || $number > $maxAreas) {
-                  continue;
-              }
-            if (!is_int($number) || $number < 1 || $number > $maxAreas) {
+            $number = $this->GetAreaNumberSafe($childID);
+            if ($number < 1 || $number > $maxAreas) {
                 continue;
             }
 
