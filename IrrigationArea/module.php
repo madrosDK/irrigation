@@ -598,16 +598,19 @@ class IrrigationArea extends IPSModule
             IPS_SetName($eid, $name);
         }
 
-        // Aktionen für den Wochenplan
-        // 0 = Inaktiv
-        // 1 = Aktiv / Bewässerung starten
         IPS_SetEventScheduleAction($eid, 0, 'Inaktiv', 0x808080, '');
         IPS_SetEventScheduleAction($eid, 1, 'Aktiv', 0x00FF00, '');
 
-        // WICHTIG:
-        // Gruppe 0 = Montag bis Sonntag, damit die Ansicht wie früher Mo–So zeigt.
-        // Bitmaske 127 = alle Wochentage
-        IPS_SetEventScheduleGroup($eid, 0, 127);
+        // Mo–So aktivierbar
+        try {
+            IPS_SetEventScheduleGroup($eid, 0, 127);
+        } catch (Throwable $e) {
+            try {
+                IPS_SetEventScheduleGroup($eid, 0, 0, 127);
+            } catch (Throwable $e2) {
+                IPS_LogMessage('IRRA[' . $this->InstanceID . ']', 'Wochenplan-Gruppe konnte nicht gesetzt werden: ' . $e2->getMessage());
+            }
+        }
 
         $handler = ($ident === 'ScheduleAuto') ? 'HandleScheduleAuto' : 'HandleScheduleTimer';
 
