@@ -607,6 +607,11 @@ class IrrigationController extends IPSModule
         return $bestID;
     }
 
+    public function AddActionLog(string $message): void
+    {
+        $this->WriteLog($message);
+    }
+
     private function WriteLog(string $message): void
     {
         $entries = [];

@@ -71,6 +71,10 @@ class IrrigationArea extends IPSModule
 
         $this->RefreshZones();
         $this->UpdateStatus();
+        $lastActionID = @$this->GetIDForIdent('LastAction');
+        if ($lastActionID !== false) {
+            IPS_SetHidden($lastActionID, true);
+        }
     }
 
     public function GetConfigurationForm()
@@ -339,7 +343,7 @@ class IrrigationArea extends IPSModule
 
         return false;
     }
-    
+
     private function GetZones(): array
     {
         $maxZones = max(1, min(10, $this->ReadPropertyInteger('MaxZones')));
@@ -415,16 +419,15 @@ class IrrigationArea extends IPSModule
 
     private function WriteLog(string $message): void
     {
-        $entries = [];
-        $buffer = $this->GetBuffer('LastActionLog');
-        if (is_string($buffer) && trim($buffer) !== '') {
-            $decoded = json_decode($buffer, true);
-            if (is_array($decoded)) { $entries = $decoded; }
+        $masterID = @IPS_GetParent($this->InstanceID);
+        $areaNumber = $this->ReadPropertyInteger('AreaNumber');
+
+        $prefix = 'Zone ' . $areaNumber . ': ';
+
+        if ($masterID > 0 && @IPS_InstanceExists($masterID) && function_exists('IRR_AddActionLog')) {
+            @IRR_AddActionLog($masterID, $prefix . $message);
         }
-        array_unshift($entries, ['time' => date('d.m.Y H:i:s'), 'message' => $message]);
-        $entries = array_slice($entries, 0, 10);
-        $this->SetBuffer('LastActionLog', json_encode($entries));
-        $this->SetValue('LastAction', $this->RenderLastActionHtml($entries));
+
         $this->SetValue('DecisionText', $message);
         IPS_LogMessage('IRRA[' . $this->InstanceID . ']', $message);
     }

@@ -117,6 +117,11 @@ class IrrigationZone extends IPSModule
         $this->UpdateVariableVisibility();
         $this->UpdateStatus();
 
+        $lastActionID = @$this->GetIDForIdent('LastAction');
+        if ($lastActionID !== false) {
+            IPS_SetHidden($lastActionID, true);
+        }
+
         $this->Debug('ApplyChanges.Properties', [
             'Enabled' => $this->ReadPropertyBoolean('Enabled'),
             'ZoneNumber' => $this->ReadPropertyInteger('ZoneNumber'),
@@ -565,7 +570,7 @@ class IrrigationZone extends IPSModule
 
         return false;
     }
-    
+
     private function SetZoneActuatorState(int $number, bool $state): bool
     {
         $targetID = $this->GetActuatorTargetID($number);
@@ -999,27 +1004,38 @@ class IrrigationZone extends IPSModule
 
     private function WriteLog(string $message): void
     {
-        $entries = [];
-        $buffer = $this->GetBuffer('LastActionLog');
+        $areaID = @IPS_GetParent($this->InstanceID);
+        $masterID = ($areaID > 0 && @IPS_InstanceExists($areaID)) ? @IPS_GetParent($areaID) : 0;
 
-        if (is_string($buffer) && trim($buffer) !== '') {
-            $decoded = json_decode($buffer, true);
-            if (is_array($decoded)) {
-                $entries = $decoded;
+        $areaNumber = 0;
+
+        if ($areaID > 0 && @IPS_InstanceExists($areaID)) {
+            try {
+                if (function_exists('IRRA_GetAreaNumber')) {
+                    $areaNumber = (int) @IRRA_GetAreaNumber($areaID);
+                } else {
+                    $areaNumber = (int) @IPS_GetProperty($areaID, 'AreaNumber');
+                }
+            } catch (Throwable $e) {
+                $areaNumber = 0;
             }
         }
 
-        array_unshift($entries, [
-            'time'    => date('d.m.Y H:i:s'),
-            'message' => $message
-        ]);
+        $zoneNumber = $this->ReadPropertyInteger('ZoneNumber');
 
-        $entries = array_slice($entries, 0, 4);
-        $this->SetBuffer('LastActionLog', json_encode($entries));
-        $this->SetValue('LastAction', $this->RenderLastActionHtml($entries));
+        $prefix = '';
+        if ($areaNumber > 0) {
+            $prefix .= 'Zone ' . $areaNumber . ' / ';
+        }
 
+        $prefix .= 'Kreis ' . $zoneNumber . ': ';
+
+        if ($masterID > 0 && @IPS_InstanceExists($masterID) && function_exists('IRR_AddActionLog')) {
+            @IRR_AddActionLog($masterID, $prefix . $message);
+        }
+
+        $this->SetValue('DecisionText', $message);
         IPS_LogMessage('IRRZ[' . $this->InstanceID . ']', $message);
-        $this->Debug('WriteLog', $message);
     }
 
     private function RenderLastActionHtml(array $entries): string
