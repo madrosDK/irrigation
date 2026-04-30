@@ -83,15 +83,6 @@ class IrrigationController extends IPSModule
     public function RequestAction($Ident, $Value)
     {
         switch ($Ident) {
-            case 'Mode':
-                $mode = (int)$Value;
-                if (!in_array($mode, [self::MODE_MANUAL, self::MODE_TIME, self::MODE_AUTO], true)) {
-                    $mode = self::MODE_MANUAL;
-                }
-                IPS_SetProperty($this->InstanceID, 'Mode', $mode);
-                IPS_ApplyChanges($this->InstanceID);
-                break;
-
             case 'PumpLeadTimeSeconds':
                 IPS_SetProperty($this->InstanceID, 'PumpLeadTimeSeconds', max(0, (int)$Value));
                 IPS_ApplyChanges($this->InstanceID);
@@ -686,9 +677,9 @@ class IrrigationController extends IPSModule
     {
         if (!IPS_VariableProfileExists('IRR.Mode')) {
             IPS_CreateVariableProfile('IRR.Mode', VARIABLETYPE_INTEGER);
-            IPS_SetVariableProfileAssociation('IRR.Mode', self::MODE_MANUAL, 'Manuell', '', -1);
-            IPS_SetVariableProfileAssociation('IRR.Mode', self::MODE_TIME, 'Zeitsteuerung', '', -1);
-            IPS_SetVariableProfileAssociation('IRR.Mode', self::MODE_AUTO, 'Automatik', '', -1);
+            IPS_SetVariableProfileAssociation('IRR.Mode', 1, 'Manuell', '', -1);
+            IPS_SetVariableProfileAssociation('IRR.Mode', 2, 'Zeitsteuerung', '', -1);
+            IPS_SetVariableProfileAssociation('IRR.Mode', 3, 'Automatik', '', -1);
         }
 
         if (!IPS_VariableProfileExists('IRR.Seconds')) {
