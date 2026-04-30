@@ -631,13 +631,7 @@ class IrrigationArea extends IPSModule
         // Wichtig: Immer alle 7 Tagesgruppen setzen/reparieren
         for ($day = 0; $day <= 6; $day++) {
             @IPS_SetEventScheduleGroup($eventID, $day, 1 << $day);
-
-            // Standard: ganzer Tag Aus
-            // Startzeit 0 Sekunden = 00:00
-            // ActionID 0 = Aus
-            @IPS_SetEventScheduleGroupPoint($eventID, $day, 0, 0);
         }
-
         // Wochenplan-Aktion AUS
         @IPS_SetEventScheduleAction($eventID, 0, 'Aus', 0x808080, '');
 
