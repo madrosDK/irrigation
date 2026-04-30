@@ -7,7 +7,7 @@
         {
           "name": "Mode",
           "type": "Select",
-          "caption": "Betriebsmodus",
+          "caption": "Betriebsmodus (alt / Kompatibilität)",
           "options": [
             { "caption": "Manuell", "value": 1 },
             { "caption": "Zeitsteuerung", "value": 2 },
@@ -17,22 +17,22 @@
         {
           "name": "PumpLeadTimeSeconds",
           "type": "NumberSpinner",
-          "caption": "Pumpenvorlauf vor jedem Kreis (Sekunden)"
+          "caption": "Pumpenvorlauf beim Sequenzstart (Sekunden)"
         },
         {
           "name": "PumpEarlyOffSeconds",
           "type": "NumberSpinner",
-          "caption": "Pumpe vor Ende des letzten Kreises ausschalten (Sekunden)"
+          "caption": "Pumpe vor Ende der letzten Zone ausschalten (Sekunden)"
         },
         {
           "name": "PauseBetweenZonesSeconds",
           "type": "NumberSpinner",
-          "caption": "Pause zwischen Kreisen (Sekunden)"
+          "caption": "Pause zwischen Kreisen / Zonen (Sekunden)"
         },
         {
           "name": "MaxZones",
           "type": "NumberSpinner",
-          "caption": "Maximale Kreise (1-10)"
+          "caption": "Maximale Kreise/Zonen (1-10)"
         }
       ]
     },
@@ -55,22 +55,36 @@
   "actions": [
     {
       "type": "Button",
-      "caption": "Neuen Kreis unter dieser Instanz anlegen",
+      "caption": "Neue Zone unter dieser Instanz anlegen",
+      "onClick": "IRR_CreateArea($id);"
+    },
+    {
+      "type": "Button",
+      "caption": "Zonen aktualisieren",
+      "onClick": "IRR_RefreshAreas($id);"
+    },
+    {
+      "type": "Label",
+      "caption": "Kompatibilität / alte Kreisstruktur"
+    },
+    {
+      "type": "Button",
+      "caption": "Neuen Kreis direkt unter dieser Instanz anlegen (alt)",
       "onClick": "IRR_CreateZone($id);"
     },
     {
       "type": "Button",
-      "caption": "Kreise aktualisieren",
+      "caption": "Kreise aktualisieren (alt)",
       "onClick": "IRR_RefreshZones($id);"
     },
     {
       "type": "Button",
-      "caption": "Sequenz manuell / zeitgesteuert starten",
+      "caption": "Sequenz manuell / zeitgesteuert starten (alt)",
       "onClick": "IRR_StartManualSequence($id);"
     },
     {
       "type": "Button",
-      "caption": "Automatik prüfen und starten",
+      "caption": "Automatik prüfen und starten (alt)",
       "onClick": "IRR_StartAutomaticSequence($id);"
     },
     {
@@ -88,7 +102,7 @@
     {
       "code": 200,
       "icon": "error",
-      "caption": "Keine Kreise oder keine Pumpe konfiguriert"
+      "caption": "Keine Kreise/Zonen oder keine Pumpe konfiguriert"
     }
   ]
 }
