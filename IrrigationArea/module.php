@@ -583,6 +583,35 @@ class IrrigationArea extends IPSModule
         $this->StartArea(false);
     }
 
+    public function GetPlannedDurationSeconds(bool $automatic = false): int
+    {
+        if (!$this->ReadPropertyBoolean('Enabled')) {
+            return 0;
+        }
+
+        $zones = $this->GetRunnableZones($automatic);
+
+        if (count($zones) === 0) {
+            return 0;
+        }
+
+        $durationSeconds = 0;
+
+        foreach ($zones as $zoneID) {
+            $minutes = $this->GetDurationMinutesSafe($zoneID);
+            if ($minutes > 0) {
+                $durationSeconds += $minutes * 60;
+            }
+        }
+
+        $pauseSeconds = max(0, $this->ReadPropertyInteger('PauseBetweenZonesSeconds'));
+        if (count($zones) > 1) {
+            $durationSeconds += (count($zones) - 1) * $pauseSeconds;
+        }
+
+        return $durationSeconds;
+    }
+
     private function MaintainWeekplan(string $Ident, string $Name): void
     {
         $eventID = @IPS_GetObjectIDByIdent($Ident, $this->InstanceID);
@@ -613,11 +642,38 @@ class IrrigationArea extends IPSModule
         @IPS_SetEventScheduleAction($eventID, 0, 'Aus', 0x808080, '');
 
         // Wochenplan-Aktion EIN
-        $script = 'IRRA_StartArea(' . $this->InstanceID . ');';
+        $automatic = ($Ident === 'ScheduleAuto') ? 'true' : 'false';
+        $script = 'IRRA_QueueAreaFromSchedule(' . $this->InstanceID . ', ' . $automatic . ');';
         @IPS_SetEventScheduleAction($eventID, 1, 'Ein', 0x27AE60, $script);
 
         // Kein allgemeines EventScript verwenden.
         @IPS_SetEventScript($eventID, '');
+    }
+
+    public function QueueAreaFromSchedule(bool $automatic): void
+    {
+        if (!$this->ReadPropertyBoolean('Enabled')) {
+            $this->WriteLog(($automatic ? 'Automatik' : 'Zeitsteuerung') . ' ignoriert - Zone deaktiviert');
+            return;
+        }
+
+        if ($automatic && $this->ReadPropertyInteger('Mode') !== self::MODE_AUTO) {
+            $this->WriteLog('Automatik ignoriert - Betriebsmodus ist nicht Automatik');
+            return;
+        }
+
+        if (!$automatic && $this->ReadPropertyInteger('Mode') !== self::MODE_TIME) {
+            $this->WriteLog('Zeitsteuerung ignoriert - Betriebsmodus ist nicht Zeitsteuerung');
+            return;
+        }
+
+        $masterID = @IPS_GetParent($this->InstanceID);
+        if ($masterID <= 0 || !@IPS_InstanceExists($masterID) || !function_exists('IRR_QueueArea')) {
+            $this->WriteLog('Zone konnte nicht an Master-Queue übergeben werden');
+            return;
+        }
+
+        @IRR_QueueArea($masterID, $this->InstanceID, $automatic);
     }
 
     private function UpdateWeekplanVisibility(): void

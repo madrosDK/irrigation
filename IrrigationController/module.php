@@ -46,6 +46,9 @@ class IrrigationController extends IPSModule
         $this->RegisterVariableString('LastAction', 'Letzte 10 Aktionen', '~HTMLBox', 100);
         $this->RegisterVariableString('ZoneOverview', 'Zonenübersicht', '~HTMLBox', 110);
 
+        $this->RegisterVariableString('EstimatedEnd', 'Voraussichtliches Ende', '~HTMLBox', 120);
+        $this->RegisterVariableString('LastDurations', 'Letzte 10 Beregnungsdauern', '~HTMLBox', 130);
+
         $this->RegisterTimer('StartFirstAreaAfterPumpTimer', 0, 'IRR_StartFirstAreaAfterPumpLead($_IPS[\'TARGET\']);');
         $this->RegisterTimer('StartNextAreaTimer', 0, 'IRR_StartNextArea($_IPS[\'TARGET\']);');
         $this->RegisterTimer('StopPumpEarlyTimer', 0, 'IRR_StopPumpEarly($_IPS[\'TARGET\']);');
@@ -53,6 +56,10 @@ class IrrigationController extends IPSModule
         $this->SetBuffer('AreaQueue', json_encode([]));
         $this->SetBuffer('CurrentAreaID', '0');
         $this->SetBuffer('LastActionLog', json_encode([]));
+
+        $this->SetBuffer('SequenceStartTime', '0');
+        $this->SetBuffer('PlannedEndTime', '0');
+        $this->SetBuffer('LastDurationsLog', json_encode([]));
 
         $this->Debug('Create', 'Master v5 initialisiert');
     }
@@ -194,6 +201,7 @@ class IrrigationController extends IPSModule
 
         $this->SetValue('ZoneOverview', $this->RenderAreaOverviewHtml($parts));
         $this->SetValue('QueueCount', count($this->GetAreaQueue()));
+        $this->UpdateEstimatedEnd();
         $this->UpdateStatus();
 
         $this->Debug('RefreshAreas', [
@@ -233,6 +241,9 @@ class IrrigationController extends IPSModule
         $this->SetValue('SequenceActive', false);
         $this->SetValue('CurrentArea', 0);
         $this->SetValue('QueueCount', 0);
+
+        $this->SetBuffer('PlannedEndTime', '0');
+        $this->UpdateEstimatedEnd();
 
         $this->WriteLog('Sequenz gestoppt');
     }
@@ -280,6 +291,7 @@ class IrrigationController extends IPSModule
         }
 
         $this->SetBuffer('CurrentAreaID', '0');
+        $this->UpdateEstimatedEnd();
 
         $queue = $this->GetAreaQueue();
         if (count($queue) === 0) {
@@ -362,6 +374,8 @@ class IrrigationController extends IPSModule
         $this->SetValue('SequenceActive', false);
         $this->SetValue('CurrentArea', 0);
         $this->SetValue('QueueCount', 0);
+
+        $this->StoreCompletedDuration();
 
         $this->WriteLog('Sequenz abgeschlossen');
     }
@@ -451,6 +465,7 @@ class IrrigationController extends IPSModule
         $queue = array_values(array_map('intval', $queue));
         $this->SetBuffer('AreaQueue', json_encode($queue));
         $this->SetValue('QueueCount', count($queue));
+        $this->UpdateEstimatedEnd();
     }
 
     private function UpdateStatus(): void
@@ -610,6 +625,158 @@ class IrrigationController extends IPSModule
         }
 
         return $bestID;
+    }
+
+    private function StoreCompletedDuration(): void
+    {
+        $start = (int)$this->GetBuffer('SequenceStartTime');
+        if ($start <= 0) {
+            return;
+        }
+
+        $minutes = (int)ceil((time() - $start) / 60);
+        if ($minutes <= 0) {
+            $minutes = 1;
+        }
+
+        $entries = [];
+        $buffer = $this->GetBuffer('LastDurationsLog');
+        if (is_string($buffer) && trim($buffer) !== '') {
+            $decoded = json_decode($buffer, true);
+            if (is_array($decoded)) {
+                $entries = $decoded;
+            }
+        }
+
+        array_unshift($entries, [
+            'time' => date('d.m.Y H:i:s'),
+            'minutes' => $minutes
+        ]);
+
+        $entries = array_slice($entries, 0, 10);
+
+        $this->SetBuffer('LastDurationsLog', json_encode($entries));
+        $this->SetValue('LastDurations', $this->RenderDurationsHtml($entries));
+
+        $this->SetBuffer('SequenceStartTime', '0');
+        $this->SetBuffer('PlannedEndTime', '0');
+        $this->UpdateEstimatedEnd();
+    }
+
+    private function RenderDurationsHtml(array $entries): string
+    {
+        $fontFamily  = htmlspecialchars($this->ReadPropertyString('HtmlFontFamily'), ENT_QUOTES, 'UTF-8');
+        $fontSize    = max(8, min(40, $this->ReadPropertyInteger('HtmlFontSize')));
+        $accentColor = htmlspecialchars($this->ReadPropertyString('HtmlAccentColor'), ENT_QUOTES, 'UTF-8');
+        $textColor   = htmlspecialchars($this->ReadPropertyString('HtmlTextColor'), ENT_QUOTES, 'UTF-8');
+
+        $html = '<div style="font-family:' . $fontFamily . ', Arial, sans-serif; font-size:' . $fontSize . 'px; line-height:1.35; text-align:right;">';
+
+        if (count($entries) === 0) {
+            $html .= '<span style="color:' . $textColor . ';">Noch keine Beregnungsdauer erfasst</span>';
+        } else {
+            foreach ($entries as $entry) {
+                $time = htmlspecialchars((string)($entry['time'] ?? ''), ENT_QUOTES, 'UTF-8');
+                $minutes = (int)($entry['minutes'] ?? 0);
+
+                $html .= '<div>';
+                $html .= '<span style="color:' . $accentColor . '; font-weight:bold;">' . $time . '</span>';
+                $html .= '<span style="color:' . $textColor . ';"> &ndash; ' . $minutes . ' min</span>';
+                $html .= '</div>';
+            }
+        }
+
+        $html .= '</div>';
+        return $html;
+    }
+
+    public function QueueArea(int $areaID, bool $automatic = false): void
+    {
+        if ($areaID <= 0 || !@IPS_InstanceExists($areaID)) {
+            $this->WriteLog('Zone konnte nicht eingereiht werden: ungültige ID');
+            return;
+        }
+
+        if (function_exists('IRRA_IsEnabled') && !@IRRA_IsEnabled($areaID)) {
+            $this->WriteLog('Zone ' . $this->GetAreaNumberSafe($areaID) . ' ist deaktiviert - nicht eingereiht');
+            return;
+        }
+
+        $durationSeconds = 0;
+        if (function_exists('IRRA_GetPlannedDurationSeconds')) {
+            $durationSeconds = (int)@IRRA_GetPlannedDurationSeconds($areaID, $automatic);
+        }
+
+        if ($durationSeconds <= 0) {
+            $this->WriteLog('Zone ' . $this->GetAreaNumberSafe($areaID) . ' hat keine berechenbare Laufzeit - nicht eingereiht');
+            return;
+        }
+
+        $queue = $this->GetAreaQueue();
+
+        $currentAreaID = (int)$this->GetBuffer('CurrentAreaID');
+        if ($currentAreaID === $areaID || in_array($areaID, $queue, true)) {
+            $this->WriteLog('Zone ' . $this->GetAreaNumberSafe($areaID) . ' ist bereits in Ausführung oder Warteschlange');
+            return;
+        }
+
+        if (!$this->GetValue('SequenceActive')) {
+            $this->SetBuffer('SequenceStartTime', (string)time());
+            $this->SetBuffer('PlannedEndTime', (string)(time() + max(0, $this->ReadPropertyInteger('PumpLeadTimeSeconds')) + $durationSeconds));
+            $this->SetAreaQueue([$areaID]);
+            $this->SetValue('SequenceActive', true);
+            $this->SetValue('CurrentArea', 0);
+
+            $this->WriteLog('Zone ' . $this->GetAreaNumberSafe($areaID) . ' eingereiht und Sequenz gestartet');
+            $this->UpdateEstimatedEnd();
+
+            $this->SetPumpState(true);
+            $leadMs = max(0, $this->ReadPropertyInteger('PumpLeadTimeSeconds')) * 1000;
+            $this->SetTimerInterval('StartFirstAreaAfterPumpTimer', max(100, $leadMs));
+            return;
+        }
+
+        $queue[] = $areaID;
+        $this->SetAreaQueue($queue);
+
+        $plannedEnd = (int)$this->GetBuffer('PlannedEndTime');
+        if ($plannedEnd <= time()) {
+            $plannedEnd = time();
+        }
+
+        $plannedEnd += max(0, $this->ReadPropertyInteger('PauseBetweenZonesSeconds')) + $durationSeconds;
+        $this->SetBuffer('PlannedEndTime', (string)$plannedEnd);
+
+        $this->WriteLog('Zone ' . $this->GetAreaNumberSafe($areaID) . ' hinten angehängt');
+        $this->UpdateEstimatedEnd();
+    }
+
+    private function UpdateEstimatedEnd(): void
+    {
+        $plannedEnd = (int)$this->GetBuffer('PlannedEndTime');
+
+        $fontFamily  = htmlspecialchars($this->ReadPropertyString('HtmlFontFamily'), ENT_QUOTES, 'UTF-8');
+        $fontSize    = max(8, min(40, $this->ReadPropertyInteger('HtmlFontSize')));
+        $accentColor = htmlspecialchars($this->ReadPropertyString('HtmlAccentColor'), ENT_QUOTES, 'UTF-8');
+        $textColor   = htmlspecialchars($this->ReadPropertyString('HtmlTextColor'), ENT_QUOTES, 'UTF-8');
+
+        if ($plannedEnd <= 0 || !$this->GetValue('SequenceActive')) {
+            $html = '<div style="font-family:' . $fontFamily . ', Arial, sans-serif; font-size:' . $fontSize . 'px; text-align:right;">';
+            $html .= '<span style="color:' . $textColor . ';">Keine aktive Planung</span>';
+            $html .= '</div>';
+            $this->SetValue('EstimatedEnd', $html);
+            return;
+        }
+
+        $remaining = max(0, $plannedEnd - time());
+        $minutes = (int)ceil($remaining / 60);
+
+        $html = '<div style="font-family:' . $fontFamily . ', Arial, sans-serif; font-size:' . $fontSize . 'px; text-align:right;">';
+        $html .= '<span style="color:' . $accentColor . '; font-weight:bold;">Ende ca. ' . date('H:i', $plannedEnd) . '</span>';
+        $html .= '<span style="color:' . $textColor . ';"> | Rest ca. ' . $minutes . ' min</span>';
+        $html .= '</div>';
+
+        $this->SetValue('EstimatedEnd', $html);
     }
 
     public function AddActionLog(string $message): void
