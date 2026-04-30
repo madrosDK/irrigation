@@ -448,7 +448,7 @@ class IrrigationArea extends IPSModule
         $style = $this->GetHtmlStyleFromMaster();
 
         $fontFamily  = htmlspecialchars((string)($style['fontFamily'] ?? 'Tahoma'), ENT_QUOTES, 'UTF-8');
-        $fontSize    = (int)($style['fontSize'] ?? 12);
+        $fontSize    = max(8, min(40, (int)($style['fontSize'] ?? 12)));
         $accentColor = htmlspecialchars((string)($style['accentColor'] ?? '#4da6ff'), ENT_QUOTES, 'UTF-8');
         $textColor   = htmlspecialchars((string)($style['textColor'] ?? '#ffffff'), ENT_QUOTES, 'UTF-8');
 
@@ -460,9 +460,6 @@ class IrrigationArea extends IPSModule
             foreach ($parts as $part) {
                 $part = (string)$part;
 
-                // Erwartet z.B.:
-                // "Kreis 1 (#12345)"
-                // "Kreis 1 - Vorgarten (#12345)"
                 $id = '';
                 $name = $part;
 
@@ -566,9 +563,9 @@ class IrrigationArea extends IPSModule
     {
         $masterID = @IPS_GetParent($this->InstanceID);
 
-        if ($masterID > 0 && function_exists('IRR_GetHtmlStyle')) {
+        if ($masterID > 0 && @IPS_InstanceExists($masterID) && function_exists('IRR_GetHtmlStyle')) {
             $json = @IRR_GetHtmlStyle($masterID);
-            $data = json_decode($json, true);
+            $data = json_decode((string)$json, true);
 
             if (is_array($data)) {
                 return $data;
@@ -576,10 +573,10 @@ class IrrigationArea extends IPSModule
         }
 
         return [
-            'fontFamily' => 'Tahoma',
-            'fontSize' => 12,
+            'fontFamily'  => 'Tahoma',
+            'fontSize'    => 12,
             'accentColor' => '#4da6ff',
-            'textColor' => '#ffffff'
+            'textColor'   => '#ffffff'
         ];
     }
 

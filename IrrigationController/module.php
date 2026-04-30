@@ -655,15 +655,20 @@ class IrrigationController extends IPSModule
 
     private function RenderLastActionHtml(array $entries): string
     {
-        $html = '<div style="font-family:Tahoma, Arial, sans-serif; font-size:12px; line-height:1.35; text-align:right;">';
+        $fontFamily  = htmlspecialchars($this->ReadPropertyString('HtmlFontFamily'), ENT_QUOTES, 'UTF-8');
+        $fontSize    = max(8, min(40, $this->ReadPropertyInteger('HtmlFontSize')));
+        $accentColor = htmlspecialchars($this->ReadPropertyString('HtmlAccentColor'), ENT_QUOTES, 'UTF-8');
+        $textColor   = htmlspecialchars($this->ReadPropertyString('HtmlTextColor'), ENT_QUOTES, 'UTF-8');
+
+        $html = '<div style="font-family:' . $fontFamily . ', Arial, sans-serif; font-size:' . $fontSize . 'px; line-height:1.35; text-align:right;">';
 
         foreach ($entries as $entry) {
             $time = htmlspecialchars((string)($entry['time'] ?? ''), ENT_QUOTES, 'UTF-8');
             $message = htmlspecialchars((string)($entry['message'] ?? ''), ENT_QUOTES, 'UTF-8');
 
             $html .= '<div>';
-            $html .= '<span style="color:#4da6ff; font-weight:bold;">' . $time . '</span>';
-            $html .= '<span style="color:#ffffff;"> &ndash; ' . $message . '</span>';
+            $html .= '<span style="color:' . $accentColor . '; font-weight:bold;">' . $time . '</span>';
+            $html .= '<span style="color:' . $textColor . ';"> &ndash; ' . $message . '</span>';
             $html .= '</div>';
         }
 
