@@ -96,7 +96,7 @@ class IrrigationController extends IPSModule
         $this->MaintainWeekplan('ScheduleAuto', 'Automatik');
         $this->UpdateWeekplanVisibility();
 
-        $this->RefreshZones();
+        $this->RefreshAreas();
         $this->UpdateStatus();
 
         $this->Debug('ApplyChanges.Properties', [
@@ -367,6 +367,7 @@ class IrrigationController extends IPSModule
         }
 
         $this->SetValue('ZoneOverview', $this->RenderZoneOverviewHtml($parts));
+        $this->UpdateStatus();
 
         $this->Debug('RefreshAreas.Done', [
             'Areas' => $areas,
@@ -1010,33 +1011,22 @@ class IrrigationController extends IPSModule
 
     private function UpdateStatus(): void
     {
-        $zones = $this->GetZones();
-        $hasPump = $this->HasPumpConfigured();
+        $areas = $this->GetAreas();
 
-        $this->Debug('UpdateStatus', [
-            'ZoneCount' => count($zones),
-            'HasPumpConfigured' => $hasPump,
-            'PumpInstance' => $this->ReadPropertyInteger('PumpInstance'),
-            'PumpVariableCompat' => $this->ReadPropertyInteger('PumpVariable'),
-            'LegacyPump' => $this->ReadPropertyInteger('Pump')
-        ]);
-
-        if (count($zones) === 0 || !$hasPump) {
-            $reason = [];
-            if (count($zones) === 0) {
-                $reason[] = 'keine Kreise gefunden';
-            }
-            if (!$hasPump) {
-                $reason[] = 'keine Pumpe konfiguriert';
-            }
-
-            $this->SetValue('DecisionText', 'Konfiguration unvollständig: ' . implode(', ', $reason));
+        if (count($areas) === 0) {
             $this->SetStatus(200);
+            $this->SetValue('DecisionText', 'Keine Zonen vorhanden');
             return;
         }
 
-        $this->SetValue('DecisionText', 'Bereit: ' . count($zones) . ' Kreis(e) gefunden');
+        if (!$this->HasPumpConfigured()) {
+            $this->SetStatus(200);
+            $this->SetValue('DecisionText', 'Keine Pumpe konfiguriert');
+            return;
+        }
+
         $this->SetStatus(102);
+        $this->SetValue('DecisionText', 'Master bereit');
     }
 
     private function RegisterProfiles(): void
