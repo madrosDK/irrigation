@@ -2,37 +2,53 @@
   "elements": [
     {
       "type": "ExpansionPanel",
-      "caption": "Allgemein",
+      "caption": "Master / Bewässerungssteuerung",
       "items": [
-        {
-          "name": "Mode",
-          "type": "Select",
-          "caption": "Betriebsmodus",
-          "options": [
-            { "caption": "Manuell", "value": 1 },
-            { "caption": "Zeitsteuerung", "value": 2 },
-            { "caption": "Automatik", "value": 3 }
-          ]
-        },
         {
           "name": "PumpLeadTimeSeconds",
           "type": "NumberSpinner",
-          "caption": "Pumpenvorlauf vor jedem Kreis (Sekunden)"
+          "caption": "Pumpenvorlauf beim Sequenzstart (Sekunden)"
         },
         {
           "name": "PumpEarlyOffSeconds",
           "type": "NumberSpinner",
-          "caption": "Pumpe vor Ende des letzten Kreises ausschalten (Sekunden)"
+          "caption": "Pumpe vor Ende der letzten Zone ausschalten (Sekunden)"
         },
         {
           "name": "PauseBetweenZonesSeconds",
           "type": "NumberSpinner",
-          "caption": "Pause zwischen Kreisen (Sekunden)"
+          "caption": "Pause zwischen Zonen (Sekunden)"
         },
         {
           "name": "MaxZones",
           "type": "NumberSpinner",
-          "caption": "Maximale Kreise (1-10)"
+          "caption": "Maximale Zonen (1-10)"
+        }
+      ]
+    },
+    {
+      "type": "ExpansionPanel",
+      "caption": "Darstellung",
+      "items": [
+        {
+          "name": "HtmlFontFamily",
+          "type": "ValidationTextBox",
+          "caption": "Schriftart"
+        },
+        {
+          "name": "HtmlFontSize",
+          "type": "NumberSpinner",
+          "caption": "Schriftgröße (px)"
+        },
+        {
+          "name": "HtmlAccentColor",
+          "type": "ValidationTextBox",
+          "caption": "Akzentfarbe / Blau"
+        },
+        {
+          "name": "HtmlTextColor",
+          "type": "ValidationTextBox",
+          "caption": "Textfarbe"
         }
       ]
     },
@@ -47,7 +63,7 @@
         },
         {
           "type": "Label",
-          "caption": "Das Modul sucht unter der Instanz automatisch die passende schaltbare Bool-Variable und schaltet diese mit RequestAction."
+          "caption": "Der Master steuert die Pumpe global. Das Modul sucht unter der Instanz automatisch die passende schaltbare Bool-Variable und schaltet diese mit RequestAction."
         }
       ]
     }
@@ -55,23 +71,18 @@
   "actions": [
     {
       "type": "Button",
-      "caption": "Neuen Kreis unter dieser Instanz anlegen",
-      "onClick": "IRR_CreateZone($id);"
+      "caption": "Neue Zone unter dieser Instanz anlegen",
+      "onClick": "IRR_CreateArea($id);"
     },
     {
       "type": "Button",
-      "caption": "Kreise aktualisieren",
-      "onClick": "IRR_RefreshZones($id);"
+      "caption": "Zonen aktualisieren",
+      "onClick": "IRR_RefreshAreas($id);"
     },
     {
       "type": "Button",
-      "caption": "Sequenz manuell / zeitgesteuert starten",
+      "caption": "Sequenz starten",
       "onClick": "IRR_StartManualSequence($id);"
-    },
-    {
-      "type": "Button",
-      "caption": "Automatik prüfen und starten",
-      "onClick": "IRR_StartAutomaticSequence($id);"
     },
     {
       "type": "Button",
@@ -83,12 +94,12 @@
     {
       "code": 102,
       "icon": "active",
-      "caption": "Instanz ist aktiv"
+      "caption": "Master ist aktiv"
     },
     {
       "code": 200,
       "icon": "error",
-      "caption": "Keine Kreise oder keine Pumpe konfiguriert"
+      "caption": "Keine Zonen oder keine Pumpe konfiguriert"
     }
   ]
 }
