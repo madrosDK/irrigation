@@ -66,6 +66,7 @@ class IrrigationController extends IPSModule
         $this->RegisterTimer('PumpVerifyTimer', 0, 'IRR_VerifyPumpStart($_IPS[\'TARGET\']);');
         $this->RegisterTimer('PumpStateSyncTimer', 0, 'IRR_SyncPumpState($_IPS[\'TARGET\']);');
 
+        $this->RegisterTimer('SequenceCommandTimer', 0, 'IRR_ProcessSequenceCommand($_IPS[\'TARGET\']);');
         $this->RegisterTimer('ActuatorCheckTimer', 0, 'IRR_CheckActuatorFeedback($_IPS[\'TARGET\']);');
         $this->RegisterTimer('StructureRefreshTimer', 0, 'IRR_RefreshStructureAfterUpdate($_IPS[\'TARGET\']);');
 
@@ -77,6 +78,8 @@ class IrrigationController extends IPSModule
         $this->SetBuffer('PlannedEndTime', '0');
         $this->SetBuffer('LastDurationsLog', json_encode([]));
 
+        $this->RegisterAttributeString('SequenceCommand', '');
+        $this->RegisterAttributeBoolean('SequenceStopping', false);
         $this->RegisterAttributeString('ActuatorChecks', '[]');
         $this->RegisterAttributeString('ActuatorErrors', '[]');
         $this->Debug('Create', 'Master v5 initialisiert');
@@ -186,15 +189,44 @@ class IrrigationController extends IPSModule
                 break;
 
                 case 'SequenceActive':
-                    if ((bool)$Value) {
-                        $this->StartManualSequence();
-                    } else {
-                        $this->StopSequence();
-                    }
+                    // WebFront/IPSVIEW darf keine synchronen Aktor-Kaskaden ausloesen.
+                    // Der letzte AUS-Wunsch hat Vorrang und sperrt weitere Starts.
+                    $this->QueueSequenceCommand((bool)$Value);
                     break;
 
             default:
                 throw new Exception('Unbekannte Aktion: ' . $Ident);
+        }
+    }
+
+    private function QueueSequenceCommand(bool $start): void
+    {
+        if (!$start) {
+            $this->WriteAttributeString('SequenceCommand', 'stop');
+            $this->SetValue('SequenceActive', false);
+            // Alle noch ausstehenden Start-Timer sofort deaktivieren.
+            $this->SetTimerInterval('StartFirstAreaAfterPumpTimer', 0);
+            $this->SetTimerInterval('StartNextAreaTimer', 0);
+            $this->SetTimerInterval('PumpDelayedStartTimer', 0);
+        } elseif ($this->ReadAttributeBoolean('SequenceStopping') || $this->ReadAttributeString('SequenceCommand') === 'stop') {
+            // Ein neuer Start darf den laufenden Stopp nicht ueberholen.
+            $this->WriteLog('Start waehrend Stopp ignoriert; bitte nach dem Stopp erneut starten');
+            return;
+        } else {
+            $this->WriteAttributeString('SequenceCommand', 'start');
+        }
+        $this->SetTimerInterval('SequenceCommandTimer', 100);
+    }
+
+    public function ProcessSequenceCommand(): void
+    {
+        $this->SetTimerInterval('SequenceCommandTimer', 0);
+        $command = $this->ReadAttributeString('SequenceCommand');
+        $this->WriteAttributeString('SequenceCommand', '');
+        if ($command === 'stop') {
+            $this->StopSequence();
+        } elseif ($command === 'start' && !$this->ReadAttributeBoolean('SequenceStopping')) {
+            $this->StartManualSequence();
         }
     }
 
@@ -299,6 +331,12 @@ class IrrigationController extends IPSModule
 
     public function StopSequence(): void
     {
+        if ($this->ReadAttributeBoolean('SequenceStopping')) { return; }
+        $this->WriteAttributeBoolean('SequenceStopping', true);
+        $this->WriteAttributeString('SequenceCommand', '');
+        $this->SetTimerInterval('SequenceCommandTimer', 0);
+        $this->SetValue('SequenceActive', false);
+        try {
         $this->SetTimerInterval('StartFirstAreaAfterPumpTimer', 0);
         $this->SetTimerInterval('StartNextAreaTimer', 0);
         $this->SetTimerInterval('StopPumpEarlyTimer', 0);
@@ -324,6 +362,9 @@ class IrrigationController extends IPSModule
         $this->UpdateEstimatedEnd();
 
         $this->WriteLog('Sequenz gestoppt');
+        } finally {
+            $this->WriteAttributeBoolean('SequenceStopping', false);
+        }
     }
 
     public function StartFirstAreaAfterPumpLead(): void
@@ -485,6 +526,10 @@ class IrrigationController extends IPSModule
 
     private function StartAreaQueue(array $areas, string $source): void
     {
+        if ($this->ReadAttributeBoolean('SequenceStopping') || $this->ReadAttributeString('SequenceCommand') === 'stop') {
+            $this->WriteLog('Start unterdrueckt: Stopp laeuft');
+            return;
+        }
         if ($this->GetValue('SequenceActive')) {
             $this->WriteLog('Sequenz läuft bereits - Start ignoriert');
             return;

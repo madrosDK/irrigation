@@ -275,3 +275,9 @@ oder keine Benachrichtigung. Die Konfiguration erfolgt im Master.
 **Hinweis:** Die Schaltvariable muss eine verlässliche Geräterückmeldung liefern.
 Wenn sie nur den angeforderten Sollzustand widerspiegelt, ist die Prüfung keine
 unabhängige Bestätigung. Vor dem produktiven Einsatz mit Testaktoren prüfen.
+
+### Build 10 – Schnelles Ein/Aus
+- Sequenzschalter arbeitet ueber einen entkoppelten 100-ms-Kommandotimer statt synchroner Aktor-Kaskaden im WebFront-Aufruf.
+- AUS hat Vorrang, deaktiviert sofort ausstehende Start-Timer und setzt die Anzeige auf AUS.
+- Reentranzschutz verhindert mehrfaches gleichzeitiges Stoppen und einen Start waehrend des Stopps.
+- Vorhandene Rueckmeldungen, Fehlerprotokolle und Benachrichtigungen bleiben erhalten.
