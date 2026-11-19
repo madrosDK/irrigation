@@ -55,11 +55,6 @@
           "caption": "Ventilaktor (Shelly oder xComfort)"
         },
         {
-          "name": "ValveVariable",
-          "type": "SelectVariable",
-          "caption": "Schaltvariable (optional, hat Vorrang)"
-        },
-        {
           "name": "ValveLeadSeconds",
           "type": "NumberSpinner",
           "caption": "Ventilvorlauf (Sekunden)"
