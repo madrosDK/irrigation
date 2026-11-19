@@ -18,6 +18,10 @@ class IrrigationArea extends IPSModule
         $this->RegisterPropertyInteger('Mode', self::MODE_MANUAL);
         $this->RegisterPropertyInteger('PauseBetweenZonesSeconds', 5);
         $this->RegisterPropertyInteger('MaxZones', 10);
+        $this->RegisterPropertyInteger('ValveInstance', 0);
+        $this->RegisterPropertyInteger('ValveVariable', 0);
+        $this->RegisterPropertyInteger('ValveLeadSeconds', 0);
+        $this->RegisterPropertyInteger('ValveAfterrunSeconds', 0);
 
         $this->RegisterProfiles();
 
@@ -28,6 +32,11 @@ class IrrigationArea extends IPSModule
         $this->EnableAction('Mode');
         $this->RegisterVariableInteger('PauseBetweenZonesSeconds', 'Pause zwischen Kreisen', 'IRR.Seconds', 40);
         $this->EnableAction('PauseBetweenZonesSeconds');
+        $this->RegisterVariableInteger('ValveLeadSeconds', 'Ventilvorlauf', 'IRR.Seconds', 41);
+        $this->EnableAction('ValveLeadSeconds');
+        $this->RegisterVariableInteger('ValveAfterrunSeconds', 'Ventilnachlauf', 'IRR.SignedSeconds', 42);
+        $this->EnableAction('ValveAfterrunSeconds');
+        $this->RegisterVariableBoolean('ValveActive', 'Zonenventil aktiv', '~Switch', 43);
         $this->RegisterVariableBoolean('AreaActive', 'Zone läuft', '~Switch', 50);
         $this->EnableAction('AreaActive');
         $this->RegisterVariableInteger('CurrentZone', 'Aktueller Kreis', '', 60);
@@ -38,6 +47,8 @@ class IrrigationArea extends IPSModule
 
         $this->RegisterTimer('StopCurrentZoneTimer', 0, 'IRRA_FinishCurrentZone($_IPS[\'TARGET\']);');
         $this->RegisterTimer('StartNextZoneTimer', 0, 'IRRA_StartNextZone($_IPS[\'TARGET\']);');
+        $this->RegisterTimer('ValveOffTimer', 0, 'IRRA_CloseValve($_IPS[\'TARGET\']);');
+        $this->RegisterTimer('AreaFinishTimer', 0, 'IRRA_CompleteAreaAfterValve($_IPS[\'TARGET\']);');
 
         $this->SetBuffer('Queue', json_encode([]));
         $this->SetBuffer('CurrentZoneID', '0');
@@ -64,6 +75,8 @@ class IrrigationArea extends IPSModule
         $this->SetValue('AreaNumber', $this->ReadPropertyInteger('AreaNumber'));
         $this->SetValue('Mode', $mode);
         $this->SetValue('PauseBetweenZonesSeconds', $this->ReadPropertyInteger('PauseBetweenZonesSeconds'));
+        $this->SetValue('ValveLeadSeconds', $this->ReadPropertyInteger('ValveLeadSeconds'));
+        $this->SetValue('ValveAfterrunSeconds', $this->ReadPropertyInteger('ValveAfterrunSeconds'));
 
         $this->MaintainWeekplan('ScheduleTimer', 'Zeitsteuerung');
         $this->MaintainWeekplan('ScheduleAuto', 'Automatik');
@@ -101,6 +114,14 @@ class IrrigationArea extends IPSModule
                 break;
             case 'PauseBetweenZonesSeconds':
                 IPS_SetProperty($this->InstanceID, 'PauseBetweenZonesSeconds', max(0, (int)$Value));
+                IPS_ApplyChanges($this->InstanceID);
+                break;
+            case 'ValveLeadSeconds':
+                IPS_SetProperty($this->InstanceID, 'ValveLeadSeconds', max(0, min(3600, (int)$Value)));
+                IPS_ApplyChanges($this->InstanceID);
+                break;
+            case 'ValveAfterrunSeconds':
+                IPS_SetProperty($this->InstanceID, 'ValveAfterrunSeconds', max(-3600, min(3600, (int)$Value)));
                 IPS_ApplyChanges($this->InstanceID);
                 break;
             case 'AreaActive':
@@ -171,6 +192,9 @@ class IrrigationArea extends IPSModule
             'AreaNumber',
             'Mode',
             'PauseBetweenZonesSeconds',
+            'ValveLeadSeconds',
+            'ValveAfterrunSeconds',
+            'ValveActive',
             'AreaActive',
             'CurrentZone',
             'QueueCount',
@@ -265,11 +289,17 @@ class IrrigationArea extends IPSModule
         $this->SetValue('CurrentZone', 0);
         $this->SetValue('QueueCount', count($zones));
         $this->WriteLog('Zone startet mit ' . count($zones) . ' Kreis(en)');
-        $this->SetTimerInterval('StartNextZoneTimer', 100);
+        $this->SetTimerInterval('ValveOffTimer', 0);
+        $this->SetTimerInterval('AreaFinishTimer', 0);
+        $this->SetValveState(true);
+        $this->SetTimerInterval('StartNextZoneTimer', max(100, $this->ReadPropertyInteger('ValveLeadSeconds') * 1000));
     }
 
     public function StopArea(bool $FromMaster = false): void
     {
+        $this->SetTimerInterval('ValveOffTimer', 0);
+        $this->SetTimerInterval('AreaFinishTimer', 0);
+        $this->SetValveState(false);
         $this->SetTimerInterval('StartNextZoneTimer', 0);
         $this->SetTimerInterval('StopCurrentZoneTimer', 0);
         $currentZoneID = (int)$this->GetBuffer('CurrentZoneID');
@@ -279,6 +309,7 @@ class IrrigationArea extends IPSModule
         $this->SetQueue([]);
         $this->SetBuffer('CurrentZoneID', '0');
         $this->SetBuffer('StartedFromMaster', '0');
+        $this->SetBuffer('FinishNotifyMaster', '0');
         $this->SetValue('AreaActive', false);
         $this->SetValue('CurrentZone', 0);
         $this->SetValue('QueueCount', 0);
@@ -313,6 +344,10 @@ class IrrigationArea extends IPSModule
         $this->WriteLog('Starte Kreis ' . $number . ' für ' . $duration . ' Minute(n)');
         @IRRZ_StartZone($zoneID, true);
         $this->SetTimerInterval('StopCurrentZoneTimer', $duration * 60 * 1000);
+        if (count($queue) === 0 && $this->ReadPropertyInteger('ValveAfterrunSeconds') < 0) {
+            $early = -$this->ReadPropertyInteger('ValveAfterrunSeconds');
+            $this->SetTimerInterval('ValveOffTimer', max(100, ($duration * 60 - $early) * 1000));
+        }
     }
 
     public function FinishCurrentZone(): void
@@ -341,12 +376,62 @@ class IrrigationArea extends IPSModule
         $this->SetQueue([]);
         $this->SetBuffer('CurrentZoneID', '0');
         $this->SetBuffer('StartedFromMaster', '0');
-        $this->SetValue('AreaActive', false);
+        $this->SetBuffer('FinishNotifyMaster', $fromMaster ? '1' : '0');
         $this->SetValue('CurrentZone', 0);
         $this->SetValue('QueueCount', 0);
         $this->WriteLog('Zone abgeschlossen');
-        if ($fromMaster) {
+        $afterrun = max(0, $this->ReadPropertyInteger('ValveAfterrunSeconds'));
+        if ($afterrun > 0) {
+            $this->SetTimerInterval('AreaFinishTimer', $afterrun * 1000);
+        } else {
+            $this->CompleteAreaAfterValve();
+        }
+    }
+
+    public function CompleteAreaAfterValve(): void
+    {
+        $this->SetTimerInterval('AreaFinishTimer', 0);
+        $this->SetTimerInterval('ValveOffTimer', 0);
+        $this->SetValveState(false);
+        $this->SetValue('AreaActive', false);
+        if ($this->GetBuffer('FinishNotifyMaster') === '1') {
+            $this->SetBuffer('FinishNotifyMaster', '0');
             $this->NotifyMasterFinished();
+        }
+    }
+
+    public function CloseValve(): void
+    {
+        $this->SetTimerInterval('ValveOffTimer', 0);
+        $this->SetValveState(false);
+    }
+
+    private function SetValveState(bool $state): void
+    {
+        $target = $this->ReadPropertyInteger('ValveVariable');
+        if ($target <= 0 || !@IPS_VariableExists($target)) {
+            $instance = $this->ReadPropertyInteger('ValveInstance');
+            if ($instance > 0 && @IPS_InstanceExists($instance)) {
+                foreach (IPS_GetChildrenIDs($instance) as $id) {
+                    if (!@IPS_VariableExists($id)) { continue; }
+                    $variable = IPS_GetVariable($id);
+                    if ($variable['VariableType'] === VARIABLETYPE_BOOLEAN &&
+                        ($variable['VariableAction'] > 0 || $variable['VariableCustomAction'] > 0)) {
+                        $target = $id;
+                        break;
+                    }
+                }
+            }
+        }
+        if ($target > 0 && @IPS_VariableExists($target)) {
+            try {
+                RequestAction($target, $state);
+                $this->SetValue('ValveActive', $state);
+            } catch (Throwable $e) {
+                IPS_LogMessage('IRRA[' . $this->InstanceID . ']', 'Ventil konnte nicht geschaltet werden: ' . $e->getMessage());
+            }
+        } else {
+            $this->SetValue('ValveActive', false);
         }
     }
 
@@ -609,6 +694,8 @@ class IrrigationArea extends IPSModule
             $durationSeconds += (count($zones) - 1) * $pauseSeconds;
         }
 
+        $durationSeconds += max(0, $this->ReadPropertyInteger('ValveLeadSeconds'));
+        $durationSeconds += max(0, $this->ReadPropertyInteger('ValveAfterrunSeconds'));
         return $durationSeconds;
     }
 
@@ -714,6 +801,11 @@ class IrrigationArea extends IPSModule
             IPS_SetVariableProfileAssociation('IRR.Mode', self::MODE_MANUAL, 'Manuell', '', -1);
             IPS_SetVariableProfileAssociation('IRR.Mode', self::MODE_TIME, 'Zeitsteuerung', '', -1);
             IPS_SetVariableProfileAssociation('IRR.Mode', self::MODE_AUTO, 'Automatik', '', -1);
+        }
+        if (!IPS_VariableProfileExists('IRR.SignedSeconds')) {
+            IPS_CreateVariableProfile('IRR.SignedSeconds', VARIABLETYPE_INTEGER);
+            IPS_SetVariableProfileText('IRR.SignedSeconds', '', ' s');
+            IPS_SetVariableProfileValues('IRR.SignedSeconds', -3600, 3600, 1);
         }
         if (!IPS_VariableProfileExists('IRR.Seconds')) {
             IPS_CreateVariableProfile('IRR.Seconds', VARIABLETYPE_INTEGER);
