@@ -55,6 +55,7 @@ class IrrigationController extends IPSModule
         $this->RegisterTimer('PumpAfterrunTimer', 0, 'IRR_StopPumpEarly($_IPS[\'TARGET\']);');
         $this->RegisterTimer('PumpDelayedStartTimer', 0, 'IRR_StartPumpDelayed($_IPS[\'TARGET\']);');
         $this->RegisterTimer('PumpVerifyTimer', 0, 'IRR_VerifyPumpStart($_IPS[\'TARGET\']);');
+        $this->RegisterTimer('PumpStateSyncTimer', 0, 'IRR_SyncPumpState($_IPS[\'TARGET\']);');
 
         $this->RegisterTimer('StructureRefreshTimer', 0, 'IRR_RefreshStructureAfterUpdate($_IPS[\'TARGET\']);');
 
@@ -103,6 +104,18 @@ class IrrigationController extends IPSModule
         }
         $this->SetValue('PumpEarlyOffSeconds', $this->ReadPropertyInteger('PumpEarlyOffSeconds'));
         $this->SetValue('PauseBetweenZonesSeconds', $this->ReadPropertyInteger('PauseBetweenZonesSeconds'));
+
+        // Rueckmeldung des Pumpenaktors abonnieren und Anzeige synchronisieren.
+        $oldTarget = (int)$this->GetBuffer('PumpObservedTarget');
+        $target = $this->GetPumpSwitchTarget();
+        if ($oldTarget > 0 && $oldTarget !== $target && @IPS_VariableExists($oldTarget)) {
+            $this->UnregisterMessage($oldTarget, VM_UPDATE);
+        }
+        if ($target > 0 && @IPS_VariableExists($target)) {
+            $this->RegisterMessage($target, VM_UPDATE);
+            $this->SetValue('PumpActive', (bool)@GetValue($target));
+        }
+        $this->SetBuffer('PumpObservedTarget', (string)$target);
 
         $this->RefreshAreas();
         $this->UpdateStatus();
@@ -274,6 +287,7 @@ class IrrigationController extends IPSModule
         $this->SetTimerInterval('PumpAfterrunTimer', 0);
         $this->SetTimerInterval('PumpDelayedStartTimer', 0);
         $this->SetTimerInterval('PumpVerifyTimer', 0);
+        $this->SetTimerInterval('PumpStateSyncTimer', 0);
 
         $currentAreaID = (int)$this->GetBuffer('CurrentAreaID');
         if ($currentAreaID > 0 && @IPS_InstanceExists($currentAreaID)) {
@@ -686,6 +700,10 @@ class IrrigationController extends IPSModule
         // Rückmeldung aus der vorhandenen Statusvariable lesen, ohne neuen Befehl.
         $actual = (bool)@GetValue($target);
         $this->SetValue('PumpActive', $actual);
+        if (!$state) {
+            $this->SetBuffer('PumpOffSyncAttempts', '0');
+            $this->SetTimerInterval('PumpStateSyncTimer', 2000);
+        }
         if ($state) {
             // Auch nach scheinbar erfolgreichem RequestAction den Ist-Zustand prüfen.
             // Die Rückmeldung kann zeitverzögert eintreffen.
@@ -698,6 +716,38 @@ class IrrigationController extends IPSModule
             $this->SetTimerInterval('PumpVerifyTimer', 0);
             if ($actual) {
                 $this->WriteLog('Pumpenausschaltung noch nicht bestätigt (Aktor ' . $target . ')');
+            }
+        }
+    }
+
+    public function MessageSink($TimeStamp, $SenderID, $Message, $Data): void
+    {
+        parent::MessageSink($TimeStamp, $SenderID, $Message, $Data);
+        if ($Message === VM_UPDATE && $SenderID === $this->GetPumpSwitchTarget()) {
+            $this->SetValue('PumpActive', (bool)@GetValue($SenderID));
+            if (!(bool)@GetValue($SenderID)) {
+                $this->SetTimerInterval('PumpStateSyncTimer', 0);
+            }
+        }
+    }
+
+    public function SyncPumpState(): void
+    {
+        $this->SetTimerInterval('PumpStateSyncTimer', 0);
+        $target = $this->GetPumpSwitchTarget();
+        if ($target <= 0 || !@IPS_VariableExists($target)) {
+            $this->SetValue('PumpActive', false);
+            return;
+        }
+        $actual = (bool)@GetValue($target);
+        $this->SetValue('PumpActive', $actual);
+        if ($actual && !$this->GetValue('SequenceActive')) {
+            $attempts = (int)$this->GetBuffer('PumpOffSyncAttempts') + 1;
+            $this->SetBuffer('PumpOffSyncAttempts', (string)$attempts);
+            if ($attempts < 6) {
+                $this->SetTimerInterval('PumpStateSyncTimer', 5000);
+            } else {
+                $this->WriteLog('Pumpenstatus weiterhin EIN gemeldet, obwohl Sequenz AUS ist; xComfort-Rueckmeldung pruefen');
             }
         }
     }
