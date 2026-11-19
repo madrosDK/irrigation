@@ -4,20 +4,66 @@
       "type": "ExpansionPanel",
       "caption": "Zone",
       "items": [
-        { "name": "Enabled", "type": "CheckBox", "caption": "Zone aktiv" },
-        { "name": "AreaNumber", "type": "NumberSpinner", "caption": "Zonennummer" },
+        {
+          "name": "Enabled",
+          "type": "CheckBox",
+          "caption": "Zone aktiv"
+        },
+        {
+          "name": "AreaNumber",
+          "type": "NumberSpinner",
+          "caption": "Zonennummer"
+        },
         {
           "name": "Mode",
           "type": "Select",
           "caption": "Betriebsmodus",
           "options": [
-            { "caption": "Manuell", "value": 1 },
-            { "caption": "Zeitsteuerung", "value": 2 },
-            { "caption": "Automatik", "value": 3 }
+            {
+              "caption": "Manuell",
+              "value": 1
+            },
+            {
+              "caption": "Zeitsteuerung",
+              "value": 2
+            },
+            {
+              "caption": "Automatik",
+              "value": 3
+            }
           ]
         },
-        { "name": "PauseBetweenZonesSeconds", "type": "NumberSpinner", "caption": "Pause zwischen Kreisen (Sekunden)" },
-        { "name": "MaxZones", "type": "NumberSpinner", "caption": "Maximale Kreise in dieser Zone (1-10)" }
+        {
+          "name": "PauseBetweenZonesSeconds",
+          "type": "NumberSpinner",
+          "caption": "Pause zwischen Kreisen (Sekunden)"
+        },
+        {
+          "name": "MaxZones",
+          "type": "NumberSpinner",
+          "caption": "Maximale Kreise in dieser Zone (1-10)"
+        }
+      ]
+    },
+    {
+      "type": "ExpansionPanel",
+      "caption": "Zonenventil",
+      "items": [
+        {
+          "name": "ValveInstance",
+          "type": "SelectInstance",
+          "caption": "Ventilaktor (Shelly oder xComfort)"
+        },
+        {
+          "name": "ValveLeadSeconds",
+          "type": "NumberSpinner",
+          "caption": "Ventilvorlauf (Sekunden)"
+        },
+        {
+          "name": "ValveAfterrunSeconds",
+          "type": "NumberSpinner",
+          "caption": "Ventilnachlauf (s, negativ = früher schließen)"
+        }
       ]
     }
   ],
@@ -44,8 +90,20 @@
     }
   ],
   "status": [
-    { "code": 102, "icon": "active", "caption": "Zone ist aktiv" },
-    { "code": 104, "icon": "inactive", "caption": "Zone ist deaktiviert" },
-    { "code": 200, "icon": "error", "caption": "Keine Kreise in dieser Zone vorhanden" }
+    {
+      "code": 102,
+      "icon": "active",
+      "caption": "Zone ist aktiv"
+    },
+    {
+      "code": 104,
+      "icon": "inactive",
+      "caption": "Zone ist deaktiviert"
+    },
+    {
+      "code": 200,
+      "icon": "error",
+      "caption": "Keine Kreise in dieser Zone vorhanden"
+    }
   ]
 }

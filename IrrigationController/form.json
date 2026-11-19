@@ -12,7 +12,7 @@
         {
           "name": "PumpEarlyOffSeconds",
           "type": "NumberSpinner",
-          "caption": "Pumpe vor Ende der letzten Zone ausschalten (Sekunden)"
+          "caption": "Pumpennachlauf (s, negativ = früher aus)"
         },
         {
           "name": "PauseBetweenZonesSeconds",
