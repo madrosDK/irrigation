@@ -65,6 +65,11 @@
           "caption": "Ventilnachlauf (s, negativ = früher schließen)"
         }
       ]
+    },
+    {
+      "type": "CheckBox",
+      "name": "MonitorValve",
+      "caption": "Zonenventil-Rückmeldung überwachen"
     }
   ],
   "actions": [

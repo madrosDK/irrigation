@@ -25,6 +25,8 @@ class IrrigationZone extends IPSModule
         $this->RegisterPropertyInteger('Actuator1Instance', 0);
         $this->RegisterPropertyInteger('Valve1Variable', 0);
         $this->RegisterPropertyInteger('Actuator2Instance', 0);
+        $this->RegisterPropertyBoolean('MonitorActuator1', true);
+        $this->RegisterPropertyBoolean('MonitorActuator2', true);
         $this->RegisterPropertyInteger('DelayBetweenActuatorsMs', 500);
 
         // Kompatibilität zu älteren Versionen, nicht im Formular sichtbar
@@ -717,6 +719,18 @@ class IrrigationZone extends IPSModule
         return $name . ': ' . $formatted;
     }
 
+    private function NotifyMasterActuatorCheck(int $target, bool $state, int $number): void
+    {
+        if ($number < 1 || $number > 2) { return; }
+        $area = @IPS_GetParent($this->InstanceID);
+        $master = $area > 0 ? @IPS_GetParent($area) : 0;
+        if ($master > 0 && function_exists('IRR_RegisterActuatorCheck')) {
+            @IRR_RegisterActuatorCheck($master, $target, $state,
+                'Zone ' . @IPS_GetName($area) . ' / Kreis ' . $this->ReadPropertyInteger('ZoneNumber') . ' Aktor ' . $number,
+                $this->ReadPropertyBoolean('MonitorActuator' . $number));
+        }
+    }
+
     private function SetActuatorState(int $targetID, bool $state, int $actuatorNumber = 0): bool
     {
         $this->Debug('SetActuatorState', [
@@ -785,13 +799,16 @@ class IrrigationZone extends IPSModule
                     }
                 }
 
+                $this->NotifyMasterActuatorCheck($switchVariableID, $state, $actuatorNumber);
                 return true;
             } catch (Throwable $e) {
+                $this->NotifyMasterActuatorCheck($switchVariableID, $state, $actuatorNumber);
                 $this->Debug('SetActuatorState.RequestAction.Exception', [
                     'SwitchVariableID' => $switchVariableID,
                     'Error' => $e->getMessage(),
                     'ActuatorNumber' => $actuatorNumber
                 ]);
+                break; // Timeout kann trotz erfolgreichem Schalten auftreten.
             }
         }
 

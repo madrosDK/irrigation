@@ -254,3 +254,24 @@ Version 5 ist eine komplette Weiterentwicklung:
 ### Build 7 – Erkennung nach Modulupdate
 
 Master und Zonen aktualisieren ihre Kindinstanzen zwei Sekunden nach ApplyChanges erneut. Bei zunächst leerer Erkennung folgen bis zu fünf Prüfungen. Vorhandene Kreise, Zonen und Einstellungen werden nicht gelöscht.
+
+## Build 9 – optionale Aktorrückmeldung
+
+Im Master kann die Aktorrückmeldung zentral aktiviert werden (standardmäßig aus,
+für bestehende Installationen ohne Verhaltensänderung). Pro Pumpe, Zonenventil
+und Kreisaktor kann die Überwachung zusätzlich deaktiviert werden. Der Master
+prüft die schaltbare Boolean-Variable nach einer einstellbaren Wartezeit. Ist der
+Zustand noch nicht bestätigt, kann er den Schaltbefehl einmal wiederholen.
+
+Bei dauerhaft fehlender Rückmeldung wird ein Eintrag in „Letzte 10 Schaltfehler“
+angelegt. Diese Einträge werden als IP-Symcon-Attribut gespeichert. Das Verhalten
+ist zwischen „Nur protokollieren“ und „Sequenz stoppen“ einstellbar; ein
+unbestätigtes AUS verhindert aus Sicherheitsgründen stets den nächsten Kreis.
+
+Benachrichtigungen: Native IP-Symcon Push-Instanz, optionales Telegram-Sendescript
+(muss die Parameter `$_IPS['TITLE']` und `$_IPS['MESSAGE']` verarbeiten), beides
+oder keine Benachrichtigung. Die Konfiguration erfolgt im Master.
+
+**Hinweis:** Die Schaltvariable muss eine verlässliche Geräterückmeldung liefern.
+Wenn sie nur den angeforderten Sollzustand widerspiegelt, ist die Prüfung keine
+unabhängige Bestätigung. Vor dem produktiven Einsatz mit Testaktoren prüfen.

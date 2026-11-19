@@ -66,6 +66,80 @@
           "caption": "Der Master steuert die Pumpe global. Das Modul sucht unter der Instanz automatisch die passende schaltbare Bool-Variable und schaltet diese mit RequestAction."
         }
       ]
+    },
+    {
+      "type": "ExpansionPanel",
+      "caption": "Aktorrückmeldung und Fehlerbenachrichtigung",
+      "items": [
+        {
+          "type": "CheckBox",
+          "name": "MonitorActuators",
+          "caption": "Aktorrückmeldung überwachen (Hauptschalter)"
+        },
+        {
+          "type": "CheckBox",
+          "name": "MonitorPump",
+          "caption": "Pumpenaktor überwachen"
+        },
+        {
+          "type": "NumberSpinner",
+          "name": "FeedbackWaitSeconds",
+          "caption": "Wartezeit je Versuch (Sekunden)"
+        },
+        {
+          "type": "NumberSpinner",
+          "name": "FeedbackRetries",
+          "caption": "Zusätzliche Schaltversuche (Standard 1)"
+        },
+        {
+          "type": "Select",
+          "name": "ActuatorFailureMode",
+          "caption": "Bei Schaltfehler",
+          "options": [
+            {
+              "caption": "Nur protokollieren",
+              "value": 0
+            },
+            {
+              "caption": "Sequenz stoppen",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "type": "Select",
+          "name": "NotificationMode",
+          "caption": "Fehlerbenachrichtigung",
+          "options": [
+            {
+              "caption": "Keine",
+              "value": 0
+            },
+            {
+              "caption": "IP-Symcon Push",
+              "value": 1
+            },
+            {
+              "caption": "Telegram",
+              "value": 2
+            },
+            {
+              "caption": "Beide",
+              "value": 3
+            }
+          ]
+        },
+        {
+          "type": "SelectInstance",
+          "name": "PushInstance",
+          "caption": "IP-Symcon Push-Instanz"
+        },
+        {
+          "type": "SelectScript",
+          "name": "TelegramScript",
+          "caption": "Telegram-Sendescript (Parameter TITLE und MESSAGE)"
+        }
+      ]
     }
   ],
   "actions": [

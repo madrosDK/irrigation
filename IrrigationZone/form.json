@@ -29,8 +29,14 @@
           "type": "Select",
           "caption": "Feuchteauswertung",
           "options": [
-            { "caption": "Niedrigster Feuchtigkeitswert", "value": 0 },
-            { "caption": "Durchschnitt der Sensoren", "value": 1 }
+            {
+              "caption": "Niedrigster Feuchtigkeitswert",
+              "value": 0
+            },
+            {
+              "caption": "Durchschnitt der Sensoren",
+              "value": 1
+            }
           ]
         }
       ]
@@ -85,6 +91,16 @@
           "caption": "Beide Aktoren sind optional. Das Modul sucht unter der Instanz automatisch die passende schaltbare Bool-Variable und schaltet diese mit RequestAction. Bei xComfort kann eine kurze Pause zwischen zwei Schaltbefehlen notwendig sein."
         }
       ]
+    },
+    {
+      "type": "CheckBox",
+      "name": "MonitorActuator1",
+      "caption": "Rückmeldung Aktor 1 überwachen"
+    },
+    {
+      "type": "CheckBox",
+      "name": "MonitorActuator2",
+      "caption": "Rückmeldung Aktor 2 überwachen"
     }
   ],
   "actions": [

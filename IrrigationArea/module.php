@@ -19,6 +19,7 @@ class IrrigationArea extends IPSModule
         $this->RegisterPropertyInteger('PauseBetweenZonesSeconds', 5);
         $this->RegisterPropertyInteger('MaxZones', 10);
         $this->RegisterPropertyInteger('ValveInstance', 0);
+        $this->RegisterPropertyBoolean('MonitorValve', true);
                 $this->RegisterPropertyInteger('ValveLeadSeconds', 0);
         $this->RegisterPropertyInteger('ValveAfterrunSeconds', 0);
 
@@ -353,6 +354,11 @@ class IrrigationArea extends IPSModule
     public function StartNextZone(): void
     {
         $this->SetTimerInterval('StartNextZoneTimer', 0);
+        $master = @IPS_GetParent($this->InstanceID);
+        if ($master > 0 && function_exists('IRR_HasPendingOffChecks') && @IRR_HasPendingOffChecks($master)) {
+            $this->SetTimerInterval('StartNextZoneTimer', 1000);
+            return;
+        }
         $queue = $this->GetQueue();
         if (count($queue) === 0) {
             $this->FinishArea();
@@ -469,12 +475,24 @@ class IrrigationArea extends IPSModule
         if ($target > 0 && @IPS_VariableExists($target)) {
             try {
                 RequestAction($target, $state);
-                $this->SetValue('ValveActive', $state);
+                $this->SetValue('ValveActive', (bool)@GetValue($target));
+                $this->NotifyMasterValveCheck($target, $state);
             } catch (Throwable $e) {
                 IPS_LogMessage('IRRA[' . $this->InstanceID . ']', 'Ventil konnte nicht geschaltet werden: ' . $e->getMessage());
+                $this->NotifyMasterValveCheck($target, $state);
             }
         } else {
             $this->SetValue('ValveActive', false);
+        }
+    }
+
+    private function NotifyMasterValveCheck(int $target, bool $state): void
+    {
+        $master = @IPS_GetParent($this->InstanceID);
+        if ($master > 0 && function_exists('IRR_RegisterActuatorCheck')) {
+            @IRR_RegisterActuatorCheck($master, $target, $state,
+                'Zone ' . $this->ReadPropertyInteger('AreaNumber') . ' Ventil',
+                $this->ReadPropertyBoolean('MonitorValve'));
         }
     }
 

@@ -24,6 +24,14 @@ class IrrigationController extends IPSModule
         $this->RegisterPropertyInteger('PumpInstance', 0);
         $this->RegisterPropertyInteger('PumpVariable', 0);
         $this->RegisterPropertyInteger('Pump', 0); // Legacy
+        $this->RegisterPropertyBoolean('MonitorActuators', false);
+        $this->RegisterPropertyBoolean('MonitorPump', true);
+        $this->RegisterPropertyInteger('FeedbackWaitSeconds', 3);
+        $this->RegisterPropertyInteger('FeedbackRetries', 1);
+        $this->RegisterPropertyInteger('ActuatorFailureMode', 1); // 0=protokollieren, 1=stoppen
+        $this->RegisterPropertyInteger('NotificationMode', 0); // 0=keine, 1=Push, 2=Telegram, 3=beide
+        $this->RegisterPropertyInteger('PushInstance', 0);
+        $this->RegisterPropertyInteger('TelegramScript', 0);
 
         $this->RegisterProfiles();
 
@@ -48,6 +56,7 @@ class IrrigationController extends IPSModule
 
         $this->RegisterVariableString('EstimatedEnd', 'Voraussichtliches Ende', '~HTMLBox', 120);
         $this->RegisterVariableString('LastDurations', 'Letzte 10 Beregnungsdauern', '~HTMLBox', 130);
+        $this->RegisterVariableString('LastErrors', 'Letzte 10 Schaltfehler', '~HTMLBox', 140);
 
         $this->RegisterTimer('StartFirstAreaAfterPumpTimer', 0, 'IRR_StartFirstAreaAfterPumpLead($_IPS[\'TARGET\']);');
         $this->RegisterTimer('StartNextAreaTimer', 0, 'IRR_StartNextArea($_IPS[\'TARGET\']);');
@@ -57,6 +66,7 @@ class IrrigationController extends IPSModule
         $this->RegisterTimer('PumpVerifyTimer', 0, 'IRR_VerifyPumpStart($_IPS[\'TARGET\']);');
         $this->RegisterTimer('PumpStateSyncTimer', 0, 'IRR_SyncPumpState($_IPS[\'TARGET\']);');
 
+        $this->RegisterTimer('ActuatorCheckTimer', 0, 'IRR_CheckActuatorFeedback($_IPS[\'TARGET\']);');
         $this->RegisterTimer('StructureRefreshTimer', 0, 'IRR_RefreshStructureAfterUpdate($_IPS[\'TARGET\']);');
 
         $this->SetBuffer('AreaQueue', json_encode([]));
@@ -67,6 +77,8 @@ class IrrigationController extends IPSModule
         $this->SetBuffer('PlannedEndTime', '0');
         $this->SetBuffer('LastDurationsLog', json_encode([]));
 
+        $this->RegisterAttributeString('ActuatorChecks', '[]');
+        $this->RegisterAttributeString('ActuatorErrors', '[]');
         $this->Debug('Create', 'Master v5 initialisiert');
     }
 
@@ -104,6 +116,12 @@ class IrrigationController extends IPSModule
         }
         $this->SetValue('PumpEarlyOffSeconds', $this->ReadPropertyInteger('PumpEarlyOffSeconds'));
         $this->SetValue('PauseBetweenZonesSeconds', $this->ReadPropertyInteger('PauseBetweenZonesSeconds'));
+        $errors = json_decode($this->ReadAttributeString('ActuatorErrors'), true);
+        $this->SetValue('LastErrors', $this->RenderLastActionHtml(is_array($errors) ? $errors : []));
+        if (!$this->ReadPropertyBoolean('MonitorActuators')) {
+            $this->SetTimerInterval('ActuatorCheckTimer', 0);
+            $this->WriteAttributeString('ActuatorChecks', '[]');
+        }
 
         // Rueckmeldung des Pumpenaktors abonnieren und Anzeige synchronisieren.
         $oldTarget = (int)$this->GetBuffer('PumpObservedTarget');
@@ -321,6 +339,10 @@ class IrrigationController extends IPSModule
     public function StartNextArea(): void
     {
         $this->SetTimerInterval('StartNextAreaTimer', 0);
+        if ($this->HasPendingOffChecks()) {
+            $this->SetTimerInterval('StartNextAreaTimer', 1000);
+            return;
+        }
 
         $queue = $this->GetAreaQueue();
         if (count($queue) === 0) {
@@ -700,6 +722,10 @@ class IrrigationController extends IPSModule
         // Rückmeldung aus der vorhandenen Statusvariable lesen, ohne neuen Befehl.
         $actual = (bool)@GetValue($target);
         $this->SetValue('PumpActive', $actual);
+        if ($this->ReadPropertyBoolean('MonitorActuators') && $this->ReadPropertyBoolean('MonitorPump')) {
+            if ($state) { $this->SetBuffer('PumpStartConfirmed', $actual ? '1' : '0'); }
+            $this->RegisterActuatorCheck($target, $state, 'Pumpe', true);
+        }
         if (!$state) {
             $this->SetBuffer('PumpOffSyncAttempts', '0');
             $this->SetTimerInterval('PumpStateSyncTimer', 2000);
@@ -708,7 +734,7 @@ class IrrigationController extends IPSModule
             // Auch nach scheinbar erfolgreichem RequestAction den Ist-Zustand prüfen.
             // Die Rückmeldung kann zeitverzögert eintreffen.
             $this->SetBuffer('PumpStartConfirmed', '0');
-            $this->SetTimerInterval('PumpVerifyTimer', 2000);
+            $this->SetTimerInterval('PumpVerifyTimer', $this->ReadPropertyBoolean('MonitorActuators') ? 0 : 2000);
             if (!$actual) {
                 $this->WriteLog('Pumpeneinschaltung: Rückmeldung wird geprüft');
             }
@@ -766,6 +792,117 @@ class IrrigationController extends IPSModule
             return;
         }
         $this->AbortSequenceOnPumpFailure('Pumpeneinschaltung nicht bestätigt (Aktor ' . $target . ')');
+    }
+
+    public function HasPendingOffChecks(): bool
+    {
+        if (!$this->ReadPropertyBoolean('MonitorActuators')) { return false; }
+        $checks = json_decode($this->ReadAttributeString('ActuatorChecks'), true);
+        if (!is_array($checks)) { return false; }
+        foreach ($checks as $check) {
+            if (!(bool)$check['desired']) { return true; }
+        }
+        return false;
+    }
+
+    public function RegisterActuatorCheck(int $target, bool $desired, string $label, bool $enabled = true): void
+    {
+        if (!$enabled || !$this->ReadPropertyBoolean('MonitorActuators')) { return; }
+        if ($target <= 0 || !@IPS_VariableExists($target)) {
+            $this->RecordActuatorError($label . ': keine gueltige Rueckmeldevariable');
+            return;
+        }
+        $checks = json_decode($this->ReadAttributeString('ActuatorChecks'), true);
+        if (!is_array($checks)) { $checks = []; }
+        // Ein neuer Schaltwunsch ersetzt die vorherige Pruefung desselben Aktors.
+        $checks[(string)$target] = [
+            'target' => $target, 'desired' => $desired, 'label' => $label,
+            'attempt' => 1, 'due' => time() + max(1, $this->ReadPropertyInteger('FeedbackWaitSeconds'))
+        ];
+        $this->WriteAttributeString('ActuatorChecks', json_encode($checks));
+        $this->SetTimerInterval('ActuatorCheckTimer', 1000);
+    }
+
+    public function CheckActuatorFeedback(): void
+    {
+        $this->SetTimerInterval('ActuatorCheckTimer', 0);
+        if (!$this->ReadPropertyBoolean('MonitorActuators')) { return; }
+        $checks = json_decode($this->ReadAttributeString('ActuatorChecks'), true);
+        if (!is_array($checks)) { return; }
+        $failed = [];
+        foreach ($checks as $key => $check) {
+            $target = (int)$check['target'];
+            $desired = (bool)$check['desired'];
+            if (@IPS_VariableExists($target) && (bool)@GetValue($target) === $desired) {
+                if ($check['label'] === 'Pumpe' && $desired) { $this->SetBuffer('PumpStartConfirmed', '1'); }
+                unset($checks[$key]);
+                continue;
+            }
+            if (time() < (int)$check['due']) { continue; }
+            if ((int)$check['attempt'] <= max(0, min(3, $this->ReadPropertyInteger('FeedbackRetries')))) {
+                // Vor jedem erneuten Versuch noch einmal den aktuellen Wert lesen.
+                if (@IPS_VariableExists($target) && (bool)@GetValue($target) === $desired) {
+                    unset($checks[$key]);
+                    continue;
+                }
+                $check['attempt']++;
+                $check['due'] = time() + max(1, $this->ReadPropertyInteger('FeedbackWaitSeconds'));
+                try {
+                    if (!@IPS_VariableExists($target)) { throw new Exception('Variable nicht vorhanden'); }
+                    RequestAction($target, $desired);
+                } catch (Throwable $e) {
+                    $this->WriteLog('Wiederholungsversuch ' . $check['label'] . ': ' . $e->getMessage());
+                }
+                $checks[$key] = $check;
+            } else {
+                $failed[] = $check;
+                unset($checks[$key]);
+            }
+        }
+        $this->WriteAttributeString('ActuatorChecks', json_encode($checks));
+        if (count($checks) > 0) { $this->SetTimerInterval('ActuatorCheckTimer', 1000); }
+        foreach ($failed as $check) {
+            $target = (int)$check['target'];
+            $desired = (bool)$check['desired'];
+            $actual = @IPS_VariableExists($target) ? ((bool)@GetValue($target) ? 'EIN' : 'AUS') : 'unbekannt';
+            $message = $check['label'] . ' (#' . $target . '): ' . ($desired ? 'EIN' : 'AUS') .
+                ' nicht bestaetigt nach ' . $check['attempt'] . ' Versuch(en); Rueckmeldung ' . $actual;
+            $this->RecordActuatorError($message);
+            // Kein weiterer Kreis bei unbestaetigtem AUS: Parallelbetrieb vermeiden.
+            if (($this->ReadPropertyInteger('ActuatorFailureMode') === 1 || !$desired) && $this->GetValue('SequenceActive')) {
+                $this->StopSequence();
+                $this->WriteLog('Sequenz nach Schaltfehler gestoppt');
+            }
+        }
+    }
+
+    private function RecordActuatorError(string $message): void
+    {
+        $this->WriteLog('SCHALTFEHLER: ' . $message);
+        $entries = json_decode($this->ReadAttributeString('ActuatorErrors'), true);
+        if (!is_array($entries)) { $entries = []; }
+        array_unshift($entries, ['time' => date('d.m.Y H:i:s'), 'message' => $message]);
+        $entries = array_slice($entries, 0, 10);
+        $this->WriteAttributeString('ActuatorErrors', json_encode($entries));
+        $this->SetValue('LastErrors', $this->RenderLastActionHtml($entries));
+        $mode = $this->ReadPropertyInteger('NotificationMode');
+        if ($mode === 0) { return; }
+        $title = 'Bewässerung – Schaltfehler';
+        if ($mode === 1 || $mode === 3) {
+            $instance = $this->ReadPropertyInteger('PushInstance');
+            if ($instance > 0 && @IPS_InstanceExists($instance)) {
+                try { IPS_SendNotification($instance, $title, $message, '', 0); }
+                catch (Throwable $e) { $this->WriteLog('Push fehlgeschlagen: ' . $e->getMessage()); }
+            }
+        }
+        if ($mode === 2 || $mode === 3) {
+            // Telegram ist optional; das gewaehlte Script erhaelt TITLE und MESSAGE.
+            $script = $this->ReadPropertyInteger('TelegramScript');
+            if ($script > 0 && @IPS_ScriptExists($script)) {
+                try { IPS_RunScriptEx($script, ['TITLE' => $title, 'MESSAGE' => $message]); }
+                catch (Throwable $e) { $this->WriteLog('Telegram-Script fehlgeschlagen: ' . $e->getMessage()); }
+            }
+        }
     }
 
     private function AbortSequenceOnPumpFailure(string $reason): void
