@@ -50,6 +50,8 @@ class IrrigationArea extends IPSModule
         $this->RegisterTimer('ValveDelayedStartTimer', 0, 'IRRA_OpenValveDelayed($_IPS[\'TARGET\']);');
         $this->RegisterTimer('AreaFinishTimer', 0, 'IRRA_CompleteAreaAfterValve($_IPS[\'TARGET\']);');
 
+        $this->RegisterTimer('StructureRefreshTimer', 0, 'IRRA_RefreshStructureAfterUpdate($_IPS[\'TARGET\']);');
+
         $this->SetBuffer('Queue', json_encode([]));
         $this->SetBuffer('CurrentZoneID', '0');
         $this->SetBuffer('LastActionLog', json_encode([]));
@@ -89,6 +91,29 @@ class IrrigationArea extends IPSModule
             IPS_SetHidden($lastActionID, true);
         }
         $this->UpdateVariableVisibility();
+        // Nach Modulupdates sind Kindmodule unter Umstaenden noch nicht geladen.
+        $this->SetBuffer('StructureRefreshAttempts', '0');
+        $this->SetTimerInterval('StructureRefreshTimer', 2000);
+    }
+
+    // Nach einem Modulupdate verzögert erneut erkennen, damit die Kindmodule
+    // ihre generierten Funktionen und Eigenschaften bereits bereitgestellt haben.
+    public function RefreshStructureAfterUpdate(): void
+    {
+        $this->SetTimerInterval('StructureRefreshTimer', 0);
+        if (IPS_GetKernelRunlevel() !== KR_READY) {
+            $this->SetTimerInterval('StructureRefreshTimer', 2000);
+            return;
+        }
+
+        $this->RefreshZones();
+        $attempt = (int)$this->GetBuffer('StructureRefreshAttempts') + 1;
+        $this->SetBuffer('StructureRefreshAttempts', (string)$attempt);
+
+        // Maximal 5 Nachpruefungen; vorhandene Objekte werden nicht geloescht.
+        if (count($this->GetZones()) === 0 && $attempt < 5) {
+            $this->SetTimerInterval('StructureRefreshTimer', 2000);
+        }
     }
 
     public function GetConfigurationForm()

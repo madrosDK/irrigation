@@ -56,6 +56,8 @@ class IrrigationController extends IPSModule
         $this->RegisterTimer('PumpDelayedStartTimer', 0, 'IRR_StartPumpDelayed($_IPS[\'TARGET\']);');
         $this->RegisterTimer('PumpVerifyTimer', 0, 'IRR_VerifyPumpStart($_IPS[\'TARGET\']);');
 
+        $this->RegisterTimer('StructureRefreshTimer', 0, 'IRR_RefreshStructureAfterUpdate($_IPS[\'TARGET\']);');
+
         $this->SetBuffer('AreaQueue', json_encode([]));
         $this->SetBuffer('CurrentAreaID', '0');
         $this->SetBuffer('LastActionLog', json_encode([]));
@@ -104,6 +106,29 @@ class IrrigationController extends IPSModule
 
         $this->RefreshAreas();
         $this->UpdateStatus();
+        // Nach Modulupdates sind Kindmodule unter Umstaenden noch nicht geladen.
+        $this->SetBuffer('StructureRefreshAttempts', '0');
+        $this->SetTimerInterval('StructureRefreshTimer', 2000);
+    }
+
+    // Nach einem Modulupdate verzögert erneut erkennen, damit die Kindmodule
+    // ihre generierten Funktionen und Eigenschaften bereits bereitgestellt haben.
+    public function RefreshStructureAfterUpdate(): void
+    {
+        $this->SetTimerInterval('StructureRefreshTimer', 0);
+        if (IPS_GetKernelRunlevel() !== KR_READY) {
+            $this->SetTimerInterval('StructureRefreshTimer', 2000);
+            return;
+        }
+
+        $this->RefreshAreas();
+        $attempt = (int)$this->GetBuffer('StructureRefreshAttempts') + 1;
+        $this->SetBuffer('StructureRefreshAttempts', (string)$attempt);
+
+        // Maximal 5 Nachpruefungen; vorhandene Objekte werden nicht geloescht.
+        if (count($this->GetAreas()) === 0 && $attempt < 5) {
+            $this->SetTimerInterval('StructureRefreshTimer', 2000);
+        }
     }
 
     public function GetConfigurationForm()

@@ -250,3 +250,7 @@ Version 5 ist eine komplette Weiterentwicklung:
 - Zonenventil wird ausschließlich über die ausgewählte Aktorinstanz geschaltet; keine separate Schaltvariable in der Konfiguration.
 - Die Laufzeitprognose berücksichtigt positive Vorlaufzeiten; negative Vorlaufzeiten verlängern die Beregnung nicht.
 - Negative Vorlaufzeiten können eine Zeit ohne eingeschaltete Pumpe oder ohne geöffnetes Zonenventil verursachen.
+
+### Build 7 – Erkennung nach Modulupdate
+
+Master und Zonen aktualisieren ihre Kindinstanzen zwei Sekunden nach ApplyChanges erneut. Bei zunächst leerer Erkennung folgen bis zu fünf Prüfungen. Vorhandene Kreise, Zonen und Einstellungen werden nicht gelöscht.
