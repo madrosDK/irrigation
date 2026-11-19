@@ -54,6 +54,7 @@ class IrrigationController extends IPSModule
         $this->RegisterTimer('StopPumpEarlyTimer', 0, 'IRR_StopPumpEarly($_IPS[\'TARGET\']);');
         $this->RegisterTimer('PumpAfterrunTimer', 0, 'IRR_StopPumpEarly($_IPS[\'TARGET\']);');
         $this->RegisterTimer('PumpDelayedStartTimer', 0, 'IRR_StartPumpDelayed($_IPS[\'TARGET\']);');
+        $this->RegisterTimer('PumpVerifyTimer', 0, 'IRR_VerifyPumpStart($_IPS[\'TARGET\']);');
 
         $this->SetBuffer('AreaQueue', json_encode([]));
         $this->SetBuffer('CurrentAreaID', '0');
@@ -247,6 +248,7 @@ class IrrigationController extends IPSModule
         $this->SetTimerInterval('StopPumpEarlyTimer', 0);
         $this->SetTimerInterval('PumpAfterrunTimer', 0);
         $this->SetTimerInterval('PumpDelayedStartTimer', 0);
+        $this->SetTimerInterval('PumpVerifyTimer', 0);
 
         $currentAreaID = (int)$this->GetBuffer('CurrentAreaID');
         if ($currentAreaID > 0 && @IPS_InstanceExists($currentAreaID)) {
@@ -270,6 +272,10 @@ class IrrigationController extends IPSModule
     public function StartFirstAreaAfterPumpLead(): void
     {
         $this->SetTimerInterval('StartFirstAreaAfterPumpTimer', 0);
+        if ($this->ReadPropertyInteger('PumpLeadTimeSeconds') >= 0 && $this->GetBuffer('PumpStartConfirmed') !== '1') {
+            $this->SetTimerInterval('StartFirstAreaAfterPumpTimer', 500);
+            return;
+        }
         $this->StartNextArea();
     }
 
@@ -452,6 +458,7 @@ class IrrigationController extends IPSModule
     {
         $this->SetTimerInterval('PumpAfterrunTimer', 0);
         $this->SetTimerInterval('PumpDelayedStartTimer', 0);
+        $this->SetTimerInterval('PumpVerifyTimer', 0);
         $lead = $this->ReadPropertyInteger('PumpLeadTimeSeconds');
         if ($lead >= 0) {
             $this->SetPumpState(true);
@@ -473,6 +480,7 @@ class IrrigationController extends IPSModule
 
     private function FinishSequence(): void
     {
+        $this->SetTimerInterval('PumpVerifyTimer', 0);
         $this->SetTimerInterval('StartFirstAreaAfterPumpTimer', 0);
         $this->SetTimerInterval('StartNextAreaTimer', 0);
         $this->SetTimerInterval('StopPumpEarlyTimer', 0);
@@ -633,27 +641,63 @@ class IrrigationController extends IPSModule
     private function SetPumpState(bool $state): void
     {
         $target = $this->GetPumpSwitchTarget();
-
-        if ($target <= 0) {
+        if ($target <= 0 || !@IPS_VariableExists($target)) {
             $this->WriteLog('Keine Pumpen-Schaltvariable gefunden');
             $this->SetValue('PumpActive', false);
+            if ($state) {
+                $this->AbortSequenceOnPumpFailure('Pumpenaktor nicht verfügbar');
+            }
             return;
         }
 
+        // Ein Timeout bedeutet bei xComfort nicht, dass der Aktor nicht geschaltet hat.
+        // Deshalb niemals automatisch denselben Schaltbefehl wiederholen.
         try {
             RequestAction($target, $state);
-            $this->SetValue('PumpActive', $state);
-            $this->Debug('SetPumpState', [
-                'Target' => $target,
-                'State' => $state
-            ]);
         } catch (Throwable $e) {
-            $this->WriteLog('Pumpe konnte nicht geschaltet werden: ' . $e->getMessage());
-            $this->Debug('SetPumpState.Exception', [
-                'Target' => $target,
-                'State' => $state,
-                'Error' => $e->getMessage()
-            ]);
+            $this->WriteLog('Pumpenaktor ' . $target . ': Schaltantwort fehlt: ' . $e->getMessage());
+        }
+
+        // Rückmeldung aus der vorhandenen Statusvariable lesen, ohne neuen Befehl.
+        $actual = (bool)@GetValue($target);
+        $this->SetValue('PumpActive', $actual);
+        if ($state) {
+            // Auch nach scheinbar erfolgreichem RequestAction den Ist-Zustand prüfen.
+            // Die Rückmeldung kann zeitverzögert eintreffen.
+            $this->SetBuffer('PumpStartConfirmed', '0');
+            $this->SetTimerInterval('PumpVerifyTimer', 2000);
+            if (!$actual) {
+                $this->WriteLog('Pumpeneinschaltung: Rückmeldung wird geprüft');
+            }
+        } else {
+            $this->SetTimerInterval('PumpVerifyTimer', 0);
+            if ($actual) {
+                $this->WriteLog('Pumpenausschaltung noch nicht bestätigt (Aktor ' . $target . ')');
+            }
+        }
+    }
+
+    public function VerifyPumpStart(): void
+    {
+        $this->SetTimerInterval('PumpVerifyTimer', 0);
+        if (!$this->GetValue('SequenceActive')) {
+            return;
+        }
+        $target = $this->GetPumpSwitchTarget();
+        if ($target > 0 && @IPS_VariableExists($target) && (bool)@GetValue($target)) {
+            $this->SetValue('PumpActive', true);
+            $this->SetBuffer('PumpStartConfirmed', '1');
+            $this->WriteLog('Pumpeneinschaltung bestätigt (Aktor ' . $target . ')');
+            return;
+        }
+        $this->AbortSequenceOnPumpFailure('Pumpeneinschaltung nicht bestätigt (Aktor ' . $target . ')');
+    }
+
+    private function AbortSequenceOnPumpFailure(string $reason): void
+    {
+        $this->WriteLog($reason . ' – Beregnung wird gestoppt');
+        if ($this->GetValue('SequenceActive')) {
+            $this->StopSequence();
         }
     }
 
